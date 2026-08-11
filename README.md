@@ -55,6 +55,41 @@ All of these are set in `.buildkite/pipeline.yml` and can be overridden per buil
 | `EXTRA_BUILD_ARGS` | — | Space-separated extra `--build-arg`s, e.g. `NIC_BACKEND=none USE_SCCACHE=1`. |
 | `CLONE_DEPTH` | `1` | Shallow clone depth for the vLLM checkout. |
 
+## Triggering perf-eval downstream
+
+Off by default. Set `TRIGGER_PERF_EVAL=true` on a build and, once the image is pushed,
+the pipeline triggers the `perf-eval` pipeline against it:
+
+```
+TRIGGER_PERF_EVAL=true
+PERF_EVAL_WORKLOADS=llama3-8b-throughput,mixtral-latency
+```
+
+perf-eval receives these environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `VLLM_IMAGE` | the image just pushed, e.g. `rocm/vllm-dev:pr-12345-abc123de` |
+| `VLLM_COMMIT` | full vLLM sha the image was built from |
+| `WORKLOADS` | the requested workloads |
+| `UPSTREAM_BUILD_URL` | link back to the build that produced the image |
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TRIGGER_PERF_EVAL` | `false` | Master switch. |
+| `PERF_EVAL_PIPELINE` | `perf-eval` | Downstream pipeline slug. |
+| `PERF_EVAL_WORKLOADS` | — | Comma- or space-separated workload names. |
+| `PERF_EVAL_FANOUT` | `false` | `true` triggers one perf-eval build per workload instead of one build receiving the whole list. |
+| `PERF_EVAL_ASYNC` | `true` | `true` fires and forgets; `false` makes this build wait for perf-eval and inherit its pass/fail. |
+| `PERF_EVAL_BRANCH` | `main` | Branch of the perf-eval repo to build. |
+| `PERF_EVAL_IMAGE_VAR` | `VLLM_IMAGE` | Rename if perf-eval reads a different variable for the image. |
+| `PERF_EVAL_WORKLOAD_VAR` | `WORKLOADS` | Rename if perf-eval reads a different variable for the workloads. |
+
+Because the image tag isn't known until the resolve step has run, and a `trigger` step's
+`build.env` is static YAML, the trigger step is generated at runtime by
+`.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names are restricted to
+`[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
+
 ## Setup
 
 1. Create the pipeline in Buildkite pointing at this repo, with **Pipeline Settings ->

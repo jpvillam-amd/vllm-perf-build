@@ -37,6 +37,18 @@ env:
   DOCKERHUB_TOKEN_SECRET: "dockerhub_token"
   PUSH_IMAGE: "true"
 
+  # --- downstream perf-eval ------------------------------------------------
+  # Off by default; set TRIGGER_PERF_EVAL=true on a build to run perf-eval
+  # against the image this pipeline just pushed.
+  TRIGGER_PERF_EVAL: "false"
+  PERF_EVAL_PIPELINE: "perf-eval"
+  # Comma- or space-separated, e.g. "llama3-8b-throughput,mixtral-latency".
+  PERF_EVAL_WORKLOADS: ""
+  # "true" -> one downstream build per workload, "false" -> one build with all.
+  PERF_EVAL_FANOUT: "false"
+  # "true" -> don't block this build on perf-eval finishing.
+  PERF_EVAL_ASYNC: "true"
+
 steps:
   - label: ":mag: Resolve vLLM ref"
     key: "resolve"
@@ -61,3 +73,11 @@ steps:
           limit: 2
         - exit_status: 255 # agent forced shutdown
           limit: 2
+
+  - label: ":chart_with_upwards_trend: Trigger perf-eval"
+    key: "perf-eval"
+    depends_on: "build"
+    command: ".buildkite/scripts/trigger_perf_eval.sh"
+    agents:
+      queue: amd-cpu
+    timeout_in_minutes: 10
