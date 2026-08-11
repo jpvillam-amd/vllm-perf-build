@@ -10,7 +10,7 @@
 # Optional overrides are listed in the env block below.
 
 agents:
-  queue: small_cpu_queue_premerge
+  queue: amd-cpu
 
 env:
   # --- what to build -------------------------------------------------------
@@ -29,7 +29,7 @@ env:
 
   # --- where it goes -------------------------------------------------------
   IMAGE_REPO: "rocm/vllm-dev"
-  DOCKERHUB_USER: "rocmci"
+  DOCKERHUB_USER: "jpvillam"
   # Name of the Buildkite secret holding the Docker Hub access token.
   DOCKERHUB_TOKEN_SECRET: "dockerhub_token"
   PUSH_IMAGE: "true"

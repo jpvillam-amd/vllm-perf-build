@@ -49,7 +49,7 @@ All of these are set in `.buildkite/pipeline.yml` and can be overridden per buil
 | `PYTORCH_ROCM_ARCH` | `gfx942;gfx950` | GPU targets. Each arch is a full HIP kernel compile pass. |
 | `MAX_JOBS` | `$(nproc)` | Build parallelism. |
 | `IMAGE_REPO` | `rocm/vllm-dev` | Destination repo. |
-| `DOCKERHUB_USER` | `rocmci` | Docker Hub account used to push. |
+| `DOCKERHUB_USER` | `jpvillam` | Docker Hub account used to push. |
 | `DOCKERHUB_TOKEN_SECRET` | `dockerhub_token` | Name of the Buildkite secret holding the access token. |
 | `PUSH_IMAGE` | `true` | Set `false` to build only, as a "does this PR still build" gate. |
 | `EXTRA_BUILD_ARGS` | — | Space-separated extra `--build-arg`s, e.g. `NIC_BACKEND=none USE_SCCACHE=1`. |
@@ -77,8 +77,8 @@ All of these are set in `.buildkite/pipeline.yml` and can be overridden per buil
    `DOCKERHUB_TOKEN` from an agent `environment` hook instead — the script prefers that
    variable when present, so no pipeline change is needed.
 
-3. Confirm the agents in the `small_cpu_queue_premerge` queue have a working docker
-   daemon and enough free disk (see below).
+3. Confirm the agents in the `amd-cpu` queue have a working docker daemon and enough
+   free disk (see below).
 
 ## How it works
 
@@ -95,10 +95,9 @@ Dockerfiles moved under `docker/`.
 
 ## Note on build cost
 
-This runs on `small_cpu_queue_premerge` as specified. Be aware that even with
-`BASE_IMAGE` pulled rather than built, the remaining work — HIP kernel compilation of
-vLLM's `csrc`, plus the Rust frontend and any NIXL/RoCSHMEM/DeepEP stages — is heavy.
-On a small CPU agent expect a long build and a large disk footprint.
+Even with `BASE_IMAGE` pulled rather than built, the remaining work — HIP kernel
+compilation of vLLM's `csrc`, plus the Rust frontend and any NIXL/RoCSHMEM/DeepEP
+stages — is heavy. Expect a long build and a large disk footprint.
 
 If builds turn out to be too slow or hit disk limits, the levers, roughly in order of
 payoff:
