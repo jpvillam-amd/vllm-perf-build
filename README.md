@@ -57,12 +57,21 @@ All of these are set in `.buildkite/pipeline.yml` and can be overridden per buil
 
 ## Setup
 
-1. Create the pipeline in Buildkite pointing at this repo, with the pipeline steps set to:
+1. Create the pipeline in Buildkite pointing at this repo, with **Pipeline Settings ->
+   Steps** set to:
 
    ```yaml
    steps:
-     - command: buildkite-agent pipeline upload .buildkite/pipeline.yml
+     - label: ":pipeline:"
+       command: buildkite-agent pipeline upload .buildkite/pipeline.yml
+       agents:
+         queue: amd-cpu
    ```
+
+   The `agents` block is required. This bootstrap step runs before Buildkite has read
+   the repo, so it does *not* inherit the `agents:` block in `.buildkite/pipeline.yml`
+   — without it the job goes to the default queue and will sit unstarted if nothing is
+   listening there.
 
 2. Create a Docker Hub access token with **Read & Write** scope on `rocm/vllm-dev`, and
    store it as a Buildkite secret named `dockerhub_token`:

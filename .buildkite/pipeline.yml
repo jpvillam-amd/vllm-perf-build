@@ -9,6 +9,9 @@
 #
 # Optional overrides are listed in the env block below.
 
+# Also set explicitly on every step below. The top-level block alone did not
+# propagate to uploaded steps on this agent version — they came through with no
+# agent query rules and sat unscheduled on the default queue.
 agents:
   queue: amd-cpu
 
@@ -38,12 +41,16 @@ steps:
   - label: ":mag: Resolve vLLM ref"
     key: "resolve"
     command: ".buildkite/scripts/resolve_ref.sh"
+    agents:
+      queue: amd-cpu
     timeout_in_minutes: 10
 
   - label: ":docker: Build & push ROCm image"
     key: "build"
     depends_on: "resolve"
     command: ".buildkite/scripts/build_and_push.sh"
+    agents:
+      queue: amd-cpu
     timeout_in_minutes: 300
     # A HIP kernel build is long and occasionally hits transient network
     # failures pulling the base image or cloning vLLM. Retry the whole step
