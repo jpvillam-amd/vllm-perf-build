@@ -16,38 +16,7 @@ agents:
   queue: amd-cpu
 
 env:
-  # --- what to build -------------------------------------------------------
-  VLLM_REPO: "https://github.com/vllm-project/vllm.git"
-
-  # --- how to build it -----------------------------------------------------
-  # Prebuilt ROCm base image. Pulled, not built, so the expensive ROCm/PyTorch
-  # layers are never compiled on this agent.
-  BASE_IMAGE: "rocm/vllm-dev:base"
-  # Dockerfile stage to produce. "vllm-openai" is the OpenAI-compatible serving
-  # image; "final" is the same runtime without the entrypoint.
-  DOCKER_TARGET: "vllm-openai"
-  # Semicolon-separated GPU targets. Each additional arch adds a full HIP
-  # kernel compile pass, so keep this as narrow as the consumers allow.
-  PYTORCH_ROCM_ARCH: "gfx942;gfx950"
-
-  # --- where it goes -------------------------------------------------------
-  IMAGE_REPO: "rocm/vllm-dev"
-  DOCKERHUB_USER: "jpvillam"
-  # Name of the Buildkite secret holding the Docker Hub access token.
-  DOCKERHUB_TOKEN_SECRET: "dockerhub_token"
-  PUSH_IMAGE: "true"
-
-  # --- downstream perf-eval ------------------------------------------------
-  # Off by default; set TRIGGER_PERF_EVAL=true on a build to run perf-eval
-  # against the image this pipeline just pushed.
-  TRIGGER_PERF_EVAL: "false"
-  PERF_EVAL_PIPELINE: "perf-eval"
-  # Comma- or space-separated, e.g. "llama3-8b-throughput,mixtral-latency".
-  PERF_EVAL_WORKLOADS: ""
-  # "true" -> one downstream build per workload, "false" -> one build with all.
-  PERF_EVAL_FANOUT: "false"
-  # "true" -> don't block this build on perf-eval finishing.
-  PERF_EVAL_ASYNC: "true"
+  DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
 
 steps:
   - label: ":mag: Resolve vLLM ref"
