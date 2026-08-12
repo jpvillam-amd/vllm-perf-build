@@ -7,7 +7,11 @@
 #   VLLM_BRANCH=my-feature       # builds that branch
 #   VLLM_COMMIT=<full-sha>       # builds that exact commit
 #
-# Optional overrides are listed in the env block below.
+# To swap AITER, add BUILD_BASE=true and AITER_BRANCH=<tag-or-branch>.
+#
+# All other options default inside the scripts rather than in an env block
+# here, because a pipeline-level env block overrides variables set on the build
+# at trigger time. See README.md for the full list.
 
 # Also set explicitly on every step below. The top-level block alone did not
 # propagate to uploaded steps on this agent version — they came through with no
@@ -26,9 +30,20 @@ steps:
       queue: amd-cpu
     timeout_in_minutes: 10
 
+  - label: ":package: Build base image (optional)"
+    key: "base"
+    depends_on: "resolve"
+    command: ".buildkite/scripts/build_base.sh"
+    agents:
+      queue: amd-cpu
+    # Builds PyTorch, Triton, flash-attention, AITER and mori from source.
+    timeout_in_minutes: 600
+
   - label: ":docker: Build & push ROCm image"
     key: "build"
-    depends_on: "resolve"
+    depends_on:
+      - "resolve"
+      - "base"
     command: ".buildkite/scripts/build_and_push.sh"
     agents:
       queue: amd-cpu

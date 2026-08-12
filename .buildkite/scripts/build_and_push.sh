@@ -2,6 +2,7 @@
 # Check out the resolved vLLM commit and build docker/Dockerfile.rocm from it,
 # then push the result to Docker Hub.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 IMAGE_REPO="${IMAGE_REPO:-rocm/vllm-dev}"
 BASE_IMAGE="${BASE_IMAGE:-rocm/vllm-dev:base}"
@@ -30,43 +31,21 @@ vllm_ref="$(meta vllm-ref)"
 commit="$(meta vllm-commit)"
 image_ref="$(meta image-ref)"
 
+# build_base.sh publishes this when BUILD_BASE=true; otherwise fall back to the
+# prebuilt base from the env block.
+base_image="$(buildkite-agent meta-data get base-image --default "" 2>/dev/null || true)"
+if [[ -n "$base_image" ]]; then
+  echo "Using base image built by this pipeline: ${base_image}"
+  BASE_IMAGE="$base_image"
+fi
+
 src_dir="${PWD}/.vllm-src"
-rm -rf "$src_dir"
 trap 'rm -rf "$src_dir"' EXIT
 
 echo "--- :git: Fetching vLLM @ ${commit}"
-git init -q "$src_dir"
-git -C "$src_dir" remote add origin "$vllm_repo"
+fetch_vllm_source "$src_dir" "$vllm_repo" "$vllm_ref" "$commit" "$CLONE_DEPTH"
 
-# Prefer fetching the sha directly (GitHub allows it) so a ref that moved since
-# resolve_ref.sh ran can't change what we build. Fall back progressively.
-if ! git -C "$src_dir" fetch --quiet --depth "$CLONE_DEPTH" origin "$commit" 2>/dev/null; then
-  if [[ -z "$vllm_ref" ]]; then
-    echo "^^^ +++"
-    echo "Could not fetch commit ${commit} from ${vllm_repo}." >&2
-    exit 1
-  fi
-  echo "Direct sha fetch unavailable, falling back to ${vllm_ref}"
-  git -C "$src_dir" fetch --quiet --depth "$CLONE_DEPTH" origin "$vllm_ref" \
-    || git -C "$src_dir" fetch --quiet origin "$vllm_ref"
-fi
-
-if ! git -C "$src_dir" checkout -q --detach "$commit" 2>/dev/null; then
-  # The ref moved past our pinned sha and the shallow fetch didn't include it.
-  echo "Pinned commit not in shallow history, deepening..."
-  git -C "$src_dir" fetch --quiet --unshallow origin "$vllm_ref" 2>/dev/null \
-    || git -C "$src_dir" fetch --quiet origin "$vllm_ref"
-  git -C "$src_dir" checkout -q --detach "$commit"
-fi
-
-echo "Checked out $(git -C "$src_dir" rev-parse HEAD)"
-
-if [[ -f "${src_dir}/docker/Dockerfile.rocm" ]]; then
-  dockerfile="docker/Dockerfile.rocm"
-elif [[ -f "${src_dir}/Dockerfile.rocm" ]]; then
-  # Pre-2025 layout, before the Dockerfiles moved under docker/.
-  dockerfile="Dockerfile.rocm"
-else
+if ! dockerfile="$(find_dockerfile "$src_dir" "docker/Dockerfile.rocm" "Dockerfile.rocm")"; then
   echo "^^^ +++"
   echo "No ROCm Dockerfile found at this commit (looked for docker/Dockerfile.rocm and Dockerfile.rocm)." >&2
   exit 1
@@ -75,13 +54,7 @@ echo "Using ${dockerfile}"
 
 if [[ "$PUSH_IMAGE" == "true" ]]; then
   echo "--- :docker: Logging in to Docker Hub as ${DOCKERHUB_USER}"
-  if [[ -n "${DOCKERHUB_TOKEN:-}" ]]; then
-    token="$DOCKERHUB_TOKEN"
-  else
-    token="$(buildkite-agent secret get "$DOCKERHUB_TOKEN_SECRET")"
-  fi
-  printf '%s' "$token" | docker login --username "$DOCKERHUB_USER" --password-stdin
-  unset token
+  docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
 fi
 
 echo "--- :hammer: Building ${image_ref}"

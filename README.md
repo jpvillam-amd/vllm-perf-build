@@ -39,7 +39,10 @@ to publish additional tags alongside the primary one.
 
 ## Configuration
 
-All of these are set in `.buildkite/pipeline.yml` and can be overridden per build:
+Defaults live in the scripts, not in a pipeline-level `env:` block — an `env:` block in
+the uploaded pipeline overrides variables set on the build at trigger time, which makes
+options impossible to turn on from the UI. Set any of these as build environment
+variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -54,6 +57,48 @@ All of these are set in `.buildkite/pipeline.yml` and can be overridden per buil
 | `PUSH_IMAGE` | `true` | Set `false` to build only, as a "does this PR still build" gate. |
 | `EXTRA_BUILD_ARGS` | — | Space-separated extra `--build-arg`s, e.g. `NIC_BACKEND=none USE_SCCACHE=1`. |
 | `CLONE_DEPTH` | `1` | Shallow clone depth for the vLLM checkout. |
+
+## Swapping AITER (building the base image)
+
+AITER is cloned and compiled inside **`Dockerfile.rocm_base`**, not `Dockerfile.rocm`.
+It's baked into `rocm/vllm-dev:base`, which the main build normally just pulls. So
+changing AITER means rebuilding the base image — passing `AITER_BRANCH` to the main
+build would be silently ignored, since `Dockerfile.rocm` has no such ARG.
+
+Set `BUILD_BASE=true` and the pipeline builds a base first, then builds vLLM on top of
+it automatically:
+
+```
+VLLM_COMMIT=9cc347ae1d5b6f5e7d0a1a2c3d4e5f60718293a4
+BUILD_BASE=true
+AITER_BRANCH=v0.1.20
+```
+
+The base is tagged `rocm/vllm-dev:base-<vllm-short-sha>-aiter-<aiter-ref>` and pushed,
+then handed to the main build via build meta-data. Because the tag encodes both inputs,
+**a base that already exists is reused rather than rebuilt** — so a second build with
+the same vLLM commit and AITER ref skips straight to the vLLM build.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BUILD_BASE` | `false` | Master switch for the base build. |
+| `AITER_BRANCH` | — | AITER tag or branch. Empty keeps the Dockerfile's own pin. |
+| `AITER_REPO` | — | AITER repo, e.g. a fork. |
+| `FA_BRANCH`, `TRITON_BRANCH`, `PYTORCH_BRANCH`, `MORI_BRANCH` | — | Same idea for the other pinned deps. |
+| `BASE_IMAGE_TAG` | derived | Override the computed base tag entirely. |
+| `BASE_FORCE_REBUILD` | `false` | Rebuild even if the tag already exists. |
+| `EXTRA_BASE_BUILD_ARGS` | — | Space-separated extra `--build-arg`s for the base build. |
+
+Two constraints inherited from `Dockerfile.rocm_base`:
+
+- It runs `git clone --branch ${AITER_BRANCH}`, which accepts a **tag or branch only**.
+  A bare commit sha will not clone — tag it in a fork if you need one.
+- `AITER_ROCM_ARCH` is an `ENV` (`gfx942;gfx950`), not an `ARG`, so `--build-arg`
+  cannot change AITER's arch list.
+
+The base build compiles PyTorch, Triton, flash-attention, AITER and mori from source.
+It is *much* longer than the vLLM build — the step allows 10 hours. If you already have
+a suitable base image, skip all of this and just set `BASE_IMAGE` instead.
 
 ## Triggering perf-eval downstream
 
