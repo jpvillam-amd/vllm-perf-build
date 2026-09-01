@@ -17,17 +17,23 @@
 #         queue: amd-cpu
 #
 # Then add a Schedule (Pipeline Settings -> Schedules), e.g. `0 7 * * *`, with
-# TRIGGER_PERF_EVAL=true and PERF_EVAL_WORKLOADS=<the mi355x recipes> in its env.
+# just TRIGGER_PERF_EVAL=true in its env — perf-eval reads VLLM_IMAGE and uses
+# its own default workloads, so no PERF_EVAL_WORKLOADS is needed.
 #
 # Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_BRANCH,
 # AITER_COMMIT, AITER_REPO, IMAGE_TAG, PUSH_IMAGE, TRIGGER_PERF_EVAL,
-# PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT. See README.md.
+# PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT. See README.md.
 
 agents:
   queue: amd-cpu
 
 env:
   DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
+  # perf-eval's nightly-dashboard migration lives on this branch, so this flow
+  # triggers it there rather than main. Uses ${VAR:-default} so a build/schedule
+  # can still override it. perf-eval reads the image from VLLM_IMAGE (our
+  # default) and needs no explicit workload list — its own defaults apply.
+  PERF_EVAL_BRANCH: "${PERF_EVAL_BRANCH:-micah/migrate-vllm-dashboard-nightly}"
 
 steps:
   - label: ":mag: Resolve nightly + AITER"

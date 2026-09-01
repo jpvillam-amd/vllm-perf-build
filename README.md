@@ -153,7 +153,13 @@ It is designed to run as a **Buildkite scheduled build**: with no environment
 variables set it resolves everything itself, so a schedule of `0 7 * * *` is
 enough. Point a second pipeline at this repo whose bootstrap upload is
 `.buildkite/pipeline.aiter-nightly.yml` (see Setup), then add the schedule with
-`TRIGGER_PERF_EVAL=true` and `PERF_EVAL_WORKLOADS=<recipes>` in its env.
+just `TRIGGER_PERF_EVAL=true` in its env.
+
+perf-eval reads the image from `VLLM_IMAGE` (the default here) and applies its
+own default workload set, so no `PERF_EVAL_WORKLOADS` is needed. This flow also
+pins `PERF_EVAL_BRANCH` to `micah/migrate-vllm-dashboard-nightly` (where the
+nightly-dashboard migration lives) instead of `main`; override it on the build
+if that changes.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -166,9 +172,10 @@ enough. Point a second pipeline at this repo whose bootstrap upload is
 | `IMAGE_TAG` | `nightly-aiter-<aiter-sha>-vllm-<vllm-sha>` | Override the computed tag. |
 | `PUSH_IMAGE` | `true` | `false` builds only. |
 | `PULL_BASE` | `true` | Pull the nightly before building (fails fast on a bad ref). |
+| `PERF_EVAL_BRANCH` | `micah/migrate-vllm-dashboard-nightly` | perf-eval repo branch to build (defaulted for this flow, not `main`). |
 
-Perf-eval is wired exactly as in the section above — `TRIGGER_PERF_EVAL`,
-`PERF_EVAL_WORKLOADS`, `PERF_EVAL_FANOUT`, etc. all apply.
+Perf-eval is otherwise wired exactly as in the section above —
+`TRIGGER_PERF_EVAL`, `PERF_EVAL_WORKLOADS`, `PERF_EVAL_FANOUT`, etc. all apply.
 
 ## Setup
 
