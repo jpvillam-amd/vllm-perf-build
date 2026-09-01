@@ -23,8 +23,19 @@ env:
   DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
 
 steps:
+  # Flow selector. This one pipeline serves two flows so we don't need a second
+  # Buildkite pipeline: the default builds vLLM from source (the steps below),
+  # while FLOW=aiter-nightly uploads the lightweight AITER-overlay flow instead.
+  # Trigger it with FLOW=aiter-nightly in the build environment.
+  - label: ":pipeline: AITER overlay flow"
+    if: build.env("FLOW") == "aiter-nightly"
+    command: "buildkite-agent pipeline upload .buildkite/pipeline.aiter-nightly.yml"
+    agents:
+      queue: amd-cpu
+
   - label: ":mag: Resolve vLLM ref"
     key: "resolve"
+    if: build.env("FLOW") != "aiter-nightly"
     command: ".buildkite/scripts/resolve_ref.sh"
     agents:
       queue: amd-cpu
@@ -32,6 +43,7 @@ steps:
 
   - label: ":package: Build base image (optional)"
     key: "base"
+    if: build.env("FLOW") != "aiter-nightly"
     depends_on: "resolve"
     command: ".buildkite/scripts/build_base.sh"
     agents:
@@ -41,6 +53,7 @@ steps:
 
   - label: ":docker: Build & push ROCm image"
     key: "build"
+    if: build.env("FLOW") != "aiter-nightly"
     depends_on:
       - "resolve"
       - "base"
@@ -60,6 +73,7 @@ steps:
 
   - label: ":chart_with_upwards_trend: Trigger perf-eval"
     key: "perf-eval"
+    if: build.env("FLOW") != "aiter-nightly"
     depends_on: "build"
     command: ".buildkite/scripts/trigger_perf_eval.sh"
     agents:

@@ -149,11 +149,16 @@ ROCm base to swap AITER (the `BUILD_BASE` path above, ~10h), it:
 3. pushes to `rocm/vllm-dev:nightly-aiter-<aiter-sha>-vllm-<vllm-sha>`, and
 4. triggers perf-eval via the same `trigger_perf_eval.sh` as the main pipeline.
 
-It is designed to run as a **Buildkite scheduled build**: with no environment
-variables set it resolves everything itself, so a schedule of `0 7 * * *` is
-enough. Point a second pipeline at this repo whose bootstrap upload is
-`.buildkite/pipeline.aiter-nightly.yml` (see Setup), then add the schedule with
-just `TRIGGER_PERF_EVAL=true` in its env.
+This is **not a separate pipeline**. `.buildkite/pipeline.yml` doubles as a
+dispatcher: setting `FLOW=aiter-nightly` on a build of the existing
+`vllm-perf-build` pipeline uploads the overlay flow instead of the
+vLLM-from-source build. No new Buildkite pipeline or settings change needed.
+
+- **Manual test:** New Build on `vllm-perf-build` with `FLOW=aiter-nightly`
+  (add `PUSH_IMAGE=false` for a harmless build-only smoke test).
+- **Nightly:** a Schedule (`0 7 * * *`) whose env sets `FLOW=aiter-nightly` and
+  `TRIGGER_PERF_EVAL=true`. With nothing else set it resolves the newest nightly
+  and AITER main on its own.
 
 perf-eval reads the image from `VLLM_IMAGE` (the default here) and applies its
 own default workload set, so no `PERF_EVAL_WORKLOADS` is needed. This flow also

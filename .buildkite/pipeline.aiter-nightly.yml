@@ -3,37 +3,31 @@
 #
 # This is the lightweight cousin of pipeline.yml's BUILD_BASE path. Instead of
 # recompiling the whole ROCm base to swap AITER (~10h), it overlays a fresh
-# AITER onto the prebuilt nightly image (~1-2h). Intended to run as a Buildkite
-# *scheduled* build; with no environment variables set it resolves the newest
-# vllm/vllm-openai-rocm:nightly-<sha> and AITER main on its own.
+# AITER onto the prebuilt nightly image (~1-2h). With no environment variables
+# set it resolves the newest vllm/vllm-openai-rocm:nightly-<sha> and AITER main
+# on its own.
 #
-# Point a second Buildkite pipeline at this repo and set its bootstrap upload to
-# this file:
+# This flow is NOT a separate Buildkite pipeline. The main pipeline.yml is a
+# dispatcher: triggering the existing vllm-perf-build pipeline with
+# FLOW=aiter-nightly uploads this file instead of the vLLM-from-source build.
+# So a manual test is just a New Build with FLOW=aiter-nightly, and a nightly
+# is a Schedule (`0 7 * * *`) whose env sets FLOW=aiter-nightly (plus
+# TRIGGER_PERF_EVAL=true to fan out to perf-eval).
 #
-#   steps:
-#     - label: ":pipeline:"
-#       command: buildkite-agent pipeline upload .buildkite/pipeline.aiter-nightly.yml
-#       agents:
-#         queue: amd-cpu
-#
-# Then add a Schedule (Pipeline Settings -> Schedules), e.g. `0 7 * * *`, with
-# just TRIGGER_PERF_EVAL=true in its env — perf-eval reads VLLM_IMAGE and uses
-# its own default workloads, so no PERF_EVAL_WORKLOADS is needed.
+# perf-eval reads VLLM_IMAGE and uses its own default workloads, so no
+# PERF_EVAL_WORKLOADS is needed.
 #
 # Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_BRANCH,
 # AITER_COMMIT, AITER_REPO, IMAGE_TAG, PUSH_IMAGE, TRIGGER_PERF_EVAL,
 # PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT. See README.md.
+#
+# NB: because pipeline.yml uploads this file as a *nested* pipeline, top-level
+# `agents`/`env` blocks don't reliably propagate to these steps on this agent
+# version (see the note in pipeline.yml). So every step sets its own `agents`,
+# and the flow-specific env defaults are set per-step rather than only here.
 
 agents:
   queue: amd-cpu
-
-env:
-  DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
-  # perf-eval's nightly-dashboard migration lives on this branch, so this flow
-  # triggers it there rather than main. Uses ${VAR:-default} so a build/schedule
-  # can still override it. perf-eval reads the image from VLLM_IMAGE (our
-  # default) and needs no explicit workload list — its own defaults apply.
-  PERF_EVAL_BRANCH: "${PERF_EVAL_BRANCH:-micah/migrate-vllm-dashboard-nightly}"
 
 steps:
   - label: ":mag: Resolve nightly + AITER"
@@ -49,6 +43,8 @@ steps:
     command: ".buildkite/scripts/build_aiter_overlay.sh"
     agents:
       queue: amd-cpu
+    env:
+      DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
     # Pulling the nightly + an AITER kernel compile (PREBUILD_KERNELS=1). Much
     # shorter than a base build, but still give it comfortable headroom.
     timeout_in_minutes: 240
@@ -65,4 +61,9 @@ steps:
     command: ".buildkite/scripts/trigger_perf_eval.sh"
     agents:
       queue: amd-cpu
+    env:
+      # perf-eval's nightly-dashboard migration lives on this branch, so this
+      # flow triggers it there rather than main. ${VAR:-default} keeps it
+      # overridable from the build/schedule.
+      PERF_EVAL_BRANCH: "${PERF_EVAL_BRANCH:-micah/migrate-vllm-dashboard-nightly}"
     timeout_in_minutes: 10
