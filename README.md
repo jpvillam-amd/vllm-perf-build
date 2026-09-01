@@ -135,6 +135,41 @@ Because the image tag isn't known until the resolve step has run, and a `trigger
 `.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names are restricted to
 `[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
 
+## AITER nightly (overlay onto the published nightly)
+
+`.buildkite/pipeline.aiter-nightly.yml` is a separate, lightweight flow for the
+common "how does AITER main look tonight?" question. Rather than rebuilding the
+ROCm base to swap AITER (the `BUILD_BASE` path above, ~10h), it:
+
+1. resolves the newest published `vllm/vllm-openai-rocm:nightly-<sha>` (or a
+   pinned `VLLM_COMMIT`) and the AITER commit (`main` by default),
+2. pulls that nightly and builds `docker/Dockerfile.aiter-overlay` on top of it,
+   which uninstalls the bundled `amd-aiter` and reinstalls AITER from the
+   resolved commit with `PREBUILD_KERNELS=1` (~1-2h, just the AITER compile),
+3. pushes to `rocm/vllm-dev:nightly-aiter-<aiter-sha>-vllm-<vllm-sha>`, and
+4. triggers perf-eval via the same `trigger_perf_eval.sh` as the main pipeline.
+
+It is designed to run as a **Buildkite scheduled build**: with no environment
+variables set it resolves everything itself, so a schedule of `0 7 * * *` is
+enough. Point a second pipeline at this repo whose bootstrap upload is
+`.buildkite/pipeline.aiter-nightly.yml` (see Setup), then add the schedule with
+`TRIGGER_PERF_EVAL=true` and `PERF_EVAL_WORKLOADS=<recipes>` in its env.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VLLM_COMMIT` | newest nightly | Pin the vLLM nightly commit; otherwise the newest `nightly-<sha>` tag on `NIGHTLY_REPO` is resolved from Docker Hub. |
+| `NIGHTLY_REPO` | `vllm/vllm-openai-rocm` | Published nightly repo to overlay onto. |
+| `OVERLAY_BASE_IMAGE` | derived | Override the base image entirely (skips the lookup). |
+| `AITER_BRANCH` | `main` | AITER branch to build. |
+| `AITER_COMMIT` | resolved from `AITER_BRANCH` | Pin AITER to an exact sha instead. Unlike the base build, the overlay full-clones then checks out, so a bare sha works. |
+| `AITER_REPO` | `https://github.com/ROCm/aiter.git` | AITER repo (e.g. a fork). |
+| `IMAGE_TAG` | `nightly-aiter-<aiter-sha>-vllm-<vllm-sha>` | Override the computed tag. |
+| `PUSH_IMAGE` | `true` | `false` builds only. |
+| `PULL_BASE` | `true` | Pull the nightly before building (fails fast on a bad ref). |
+
+Perf-eval is wired exactly as in the section above — `TRIGGER_PERF_EVAL`,
+`PERF_EVAL_WORKLOADS`, `PERF_EVAL_FANOUT`, etc. all apply.
+
 ## Setup
 
 1. Create the pipeline in Buildkite pointing at this repo, with **Pipeline Settings ->

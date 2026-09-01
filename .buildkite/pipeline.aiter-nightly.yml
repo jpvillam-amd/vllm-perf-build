@@ -1,0 +1,62 @@
+# AITER nightly: rebuild AITER (from main by default) on top of the latest
+# published vLLM ROCm nightly, push the result, and kick off perf-eval.
+#
+# This is the lightweight cousin of pipeline.yml's BUILD_BASE path. Instead of
+# recompiling the whole ROCm base to swap AITER (~10h), it overlays a fresh
+# AITER onto the prebuilt nightly image (~1-2h). Intended to run as a Buildkite
+# *scheduled* build; with no environment variables set it resolves the newest
+# vllm/vllm-openai-rocm:nightly-<sha> and AITER main on its own.
+#
+# Point a second Buildkite pipeline at this repo and set its bootstrap upload to
+# this file:
+#
+#   steps:
+#     - label: ":pipeline:"
+#       command: buildkite-agent pipeline upload .buildkite/pipeline.aiter-nightly.yml
+#       agents:
+#         queue: amd-cpu
+#
+# Then add a Schedule (Pipeline Settings -> Schedules), e.g. `0 7 * * *`, with
+# TRIGGER_PERF_EVAL=true and PERF_EVAL_WORKLOADS=<the mi355x recipes> in its env.
+#
+# Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_BRANCH,
+# AITER_COMMIT, AITER_REPO, IMAGE_TAG, PUSH_IMAGE, TRIGGER_PERF_EVAL,
+# PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT. See README.md.
+
+agents:
+  queue: amd-cpu
+
+env:
+  DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
+
+steps:
+  - label: ":mag: Resolve nightly + AITER"
+    key: "resolve-nightly"
+    command: ".buildkite/scripts/resolve_nightly.sh"
+    agents:
+      queue: amd-cpu
+    timeout_in_minutes: 10
+
+  - label: ":docker: Build & push AITER overlay"
+    key: "overlay"
+    depends_on: "resolve-nightly"
+    command: ".buildkite/scripts/build_aiter_overlay.sh"
+    agents:
+      queue: amd-cpu
+    # Pulling the nightly + an AITER kernel compile (PREBUILD_KERNELS=1). Much
+    # shorter than a base build, but still give it comfortable headroom.
+    timeout_in_minutes: 240
+    retry:
+      automatic:
+        - exit_status: -1  # agent lost
+          limit: 2
+        - exit_status: 255 # agent forced shutdown
+          limit: 2
+
+  - label: ":chart_with_upwards_trend: Trigger perf-eval"
+    key: "perf-eval"
+    depends_on: "overlay"
+    command: ".buildkite/scripts/trigger_perf_eval.sh"
+    agents:
+      queue: amd-cpu
+    timeout_in_minutes: 10

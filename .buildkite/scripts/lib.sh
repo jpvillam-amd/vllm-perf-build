@@ -60,6 +60,28 @@ docker_hub_login() {
   printf '%s' "$token" | docker login --username "$user" --password-stdin
 }
 
+# resolve_latest_nightly_commit <repo>
+# Prints the vLLM sha of the most recently pushed `nightly-<sha>` tag on the
+# given Docker Hub repo (e.g. vllm/vllm-openai-rocm). Empty on no match.
+#
+# We resolve the concrete commit rather than trusting the mutable `:nightly`
+# tag so the build pins an immutable input and the resulting image tag is
+# traceable to an exact vLLM commit.
+resolve_latest_nightly_commit() {
+  local repo="$1"
+  local url="https://hub.docker.com/v2/repositories/${repo}/tags?page_size=100&ordering=last_updated"
+  curl -fsSL "$url" | python3 -c '
+import sys, json, re
+pat = re.compile(r"^nightly-([0-9a-f]{7,40})$")
+data = json.load(sys.stdin)
+for t in data.get("results", []):
+    m = pat.match(t.get("name", ""))
+    if m:
+        print(m.group(1))
+        break
+'
+}
+
 # Reduce a string to something usable inside a docker tag.
 sanitize_tag_component() {
   local s

@@ -1,0 +1,50 @@
+# Overlay a fresh AITER build onto an already-published vLLM ROCm image.
+#
+# This is the lightweight alternative to rebuilding Dockerfile.rocm_base: instead
+# of compiling PyTorch/Triton/FA/AITER/mori from source (~10h), we take the
+# prebuilt nightly image and only swap AITER. Expect ~1-2h, dominated by the
+# AITER kernel compile (PREBUILD_KERNELS=1).
+#
+# Build args:
+#   BASE_IMAGE   - the published nightly, e.g. vllm/vllm-openai-rocm:nightly-<sha>
+#   AITER_COMMIT - git sha (or ref) to build AITER from
+#   AITER_REPO   - AITER git repo (default upstream ROCm/aiter)
+#   VLLM_COMMIT  - recorded in /app/versions.txt for traceability
+
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:nightly
+FROM ${BASE_IMAGE}
+
+ARG AITER_COMMIT
+ARG AITER_REPO=https://github.com/ROCm/aiter.git
+ARG VLLM_COMMIT=unknown
+
+# Mirrors AITER_ROCM_ARCH from Dockerfile.rocm_base. It is an ENV there (not an
+# ARG), so it cannot be overridden per-build without editing this file.
+ENV AITER_ROCM_ARCH=gfx942;gfx950
+
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Drop the AITER wheel baked into the nightly. vLLM ROCm nightlies ship it under
+# the PyPI dist name amd-aiter (not aiter); uninstall both to be safe and fail
+# loudly if either survives, so we never silently ship the stock AITER.
+RUN python3 -m pip uninstall -y amd-aiter aiter || true \
+    && ! python3 -m pip show amd-aiter aiter >/dev/null 2>&1
+
+# Full (non-shallow) clone so a bare commit sha can be checked out — unlike
+# Dockerfile.rocm_base's `git clone --branch`, which only accepts a tag/branch.
+RUN git clone --recursive "${AITER_REPO}" /tmp/aiter \
+    && cd /tmp/aiter \
+    && git checkout "${AITER_COMMIT}" \
+    && git submodule update --init --recursive \
+    && python3 -m pip install -r requirements.txt \
+    && python3 -m pip install pyyaml \
+    && PREBUILD_KERNELS=1 AITER_USE_SYSTEM_TRITON=1 GPU_ARCHS="${AITER_ROCM_ARCH}" \
+       python3 setup.py bdist_wheel --dist-dir /tmp/aiter/dist \
+    && python3 -m pip install /tmp/aiter/dist/*.whl \
+    && rm -rf /tmp/aiter
+
+RUN mkdir -p /app \
+    && printf 'VLLM_COMMIT=%s\nAITER_COMMIT=%s\nAITER_REPO=%s\nPREBUILD_KERNELS=1\n' \
+       "${VLLM_COMMIT}" "${AITER_COMMIT}" "${AITER_REPO}" >> /app/versions.txt
