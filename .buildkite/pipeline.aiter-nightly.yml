@@ -45,9 +45,9 @@ steps:
       queue: amd-cpu
     env:
       DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
-    # Pulling the nightly + an AITER kernel compile (PREBUILD_KERNELS=1). Much
-    # shorter than a base build, but still give it comfortable headroom.
-    timeout_in_minutes: 240
+    # Pulling the nightly + an AITER kernel compile (PREBUILD_KERNELS=1). The
+    # kernel prebuild can be very slow, so allow up to 8h.
+    timeout_in_minutes: 480
     retry:
       automatic:
         - exit_status: -1  # agent lost
