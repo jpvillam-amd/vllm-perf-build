@@ -56,7 +56,10 @@ steps:
           limit: 2
 
   - label: ":chart_with_upwards_trend: Trigger perf-eval"
-    key: "perf-eval"
+    # Distinct from pipeline.yml's "perf-eval" key: a skipped (if:false) step in
+    # the initial upload still reserves its key, so a nested step reusing it is
+    # rejected as a duplicate.
+    key: "aiter-perf-eval"
     depends_on: "overlay"
     command: ".buildkite/scripts/trigger_perf_eval.sh"
     agents:
