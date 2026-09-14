@@ -85,7 +85,10 @@ if [[ "$PERF_EVAL_FANOUT" == "true" ]]; then
   done
 else
   echo "--- :chart_with_upwards_trend: Triggering a single perf-eval build"
-  emit_trigger "" "${workloads[*]:-}"
+  # Comma-separate the list: perf-eval splits WORKLOADS on commas/newlines, not
+  # spaces, so a space-joined value would be read as one bogus entry.
+  workloads_csv="$(IFS=,; printf '%s' "${workloads[*]:-}")"
+  emit_trigger "" "$workloads_csv"
 fi
 
 echo "Pipeline : ${PERF_EVAL_PIPELINE}"
