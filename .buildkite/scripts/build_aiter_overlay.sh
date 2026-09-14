@@ -27,8 +27,8 @@ meta() { buildkite-agent meta-data get "$1"; }
 
 vllm_commit="$(meta vllm-commit)"
 base_image="$(meta overlay-base-image)"
-aiter_repo="$(meta aiter-repo)"
-aiter_commit="$(meta aiter-commit)"
+aiter_wheel_url="$(meta aiter-wheel-url)"
+aiter_version="$(meta aiter-version)"
 image_ref="$(meta image-ref)"
 
 # Dockerfile lives in this repo, checked out by the agent. It COPYs nothing, so
@@ -54,10 +54,10 @@ if [[ "$PULL_BASE" == "true" ]]; then
 fi
 
 echo "--- :hammer: Building ${image_ref}"
-echo "Base image  : ${base_image}"
-echo "vLLM commit : ${vllm_commit}"
-echo "AITER repo  : ${aiter_repo}"
-echo "AITER commit: ${aiter_commit}"
+echo "Base image   : ${base_image}"
+echo "vLLM commit  : ${vllm_commit}"
+echo "AITER version: ${aiter_version}"
+echo "AITER wheel  : ${aiter_wheel_url}"
 df -h "$PWD" || true
 
 build_cmd=(
@@ -65,11 +65,10 @@ build_cmd=(
   --file "$dockerfile"
   --tag "$image_ref"
   --build-arg "BASE_IMAGE=${base_image}"
-  --build-arg "AITER_REPO=${aiter_repo}"
-  --build-arg "AITER_COMMIT=${aiter_commit}"
+  --build-arg "AITER_WHEEL_URL=${aiter_wheel_url}"
   --build-arg "VLLM_COMMIT=${vllm_commit}"
-  --label "org.opencontainers.image.source=${aiter_repo%.git}"
-  --label "org.opencontainers.image.revision=${aiter_commit}"
+  --label "aiter.wheel=${aiter_wheel_url}"
+  --label "aiter.version=${aiter_version}"
   --label "vllm.commit=${vllm_commit}"
   --label "buildkite.build.url=${BUILDKITE_BUILD_URL:-}"
 )
@@ -83,8 +82,9 @@ done
 build_cmd+=("$context_dir")
 "${build_cmd[@]}"
 
-echo "--- :mag: Verifying AITER came from ${aiter_commit:0:8}"
+echo "--- :mag: Verifying installed AITER wheel"
 docker run --rm --entrypoint cat "$image_ref" /app/versions.txt || true
+docker run --rm --entrypoint python3 "$image_ref" -m pip show amd-aiter 2>/dev/null | grep -i '^Version:' || true
 
 echo "--- :mag: Image summary"
 docker image inspect "$image_ref" \
@@ -113,6 +113,6 @@ digest="$(docker image inspect "$image_ref" \
   echo "docker pull ${image_ref}"
   echo '```'
   echo "- vLLM commit: \`${vllm_commit}\`"
-  echo "- AITER commit: \`${aiter_commit}\`"
+  echo "- AITER wheel: \`${aiter_version}\`"
   [[ -n "$digest" ]] && echo "- Digest: \`${digest}\`"
 } | buildkite-agent annotate --style success --context "image"

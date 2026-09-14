@@ -142,12 +142,18 @@ common "how does AITER main look tonight?" question. Rather than rebuilding the
 ROCm base to swap AITER (the `BUILD_BASE` path above, ~10h), it:
 
 1. resolves the newest published `vllm/vllm-openai-rocm:nightly-<sha>` (or a
-   pinned `VLLM_COMMIT`) and the AITER commit (`main` by default),
+   pinned `VLLM_COMMIT`) and the newest AITER nightly wheel (rocm7.2.3 by
+   default) from the AMD nightlies index,
 2. pulls that nightly and builds `docker/Dockerfile.aiter-overlay` on top of it,
-   which uninstalls the bundled `amd-aiter` and reinstalls AITER from the
-   resolved commit with `PREBUILD_KERNELS=1` (~1-2h, just the AITER compile),
+   which uninstalls the bundled `amd-aiter` and `pip install`s the resolved
+   nightly wheel `--no-deps` (no kernel compile, so just the pull/install),
 3. pushes to `rocm/vllm-dev:nightly-aiter-<aiter-sha>-vllm-<vllm-sha>`, and
 4. triggers perf-eval via the same `trigger_perf_eval.sh` as the main pipeline.
+
+The AITER wheel index is
+<https://rocm.frameworks-nightlies.amd.com/whl-multi-arch/amd-aiter/>; the flow
+picks the highest-versioned `rocm7.2.3` `cp312` wheel (whose `dYYYYMMDD` local
+segment orders the nightlies by date).
 
 This is **not a separate pipeline**. `.buildkite/pipeline.yml` doubles as a
 dispatcher: setting `FLOW=aiter-nightly` on a build of the existing
@@ -158,7 +164,7 @@ vLLM-from-source build. No new Buildkite pipeline or settings change needed.
   (add `PUSH_IMAGE=false` for a harmless build-only smoke test).
 - **Nightly:** a Schedule (`0 7 * * *`) whose env sets `FLOW=aiter-nightly` and
   `TRIGGER_PERF_EVAL=true`. With nothing else set it resolves the newest nightly
-  and AITER main on its own.
+  and the newest AITER wheel on its own.
 
 perf-eval reads the image from `VLLM_IMAGE` (the default here) and applies its
 own default workload set, so no `PERF_EVAL_WORKLOADS` is needed. This flow also
@@ -171,9 +177,9 @@ if that changes.
 | `VLLM_COMMIT` | newest nightly | Pin the vLLM nightly commit; otherwise the newest `nightly-<sha>` tag on `NIGHTLY_REPO` is resolved from Docker Hub. |
 | `NIGHTLY_REPO` | `vllm/vllm-openai-rocm` | Published nightly repo to overlay onto. |
 | `OVERLAY_BASE_IMAGE` | derived | Override the base image entirely (skips the lookup). |
-| `AITER_BRANCH` | `main` | AITER branch to build. |
-| `AITER_COMMIT` | resolved from `AITER_BRANCH` | Pin AITER to an exact sha instead. Unlike the base build, the overlay full-clones then checks out, so a bare sha works. |
-| `AITER_REPO` | `https://github.com/ROCm/aiter.git` | AITER repo (e.g. a fork). |
+| `AITER_WHEEL_URL` | newest wheel | Pin an exact amd-aiter wheel URL, skipping the index lookup. |
+| `AITER_ROCM_VARIANT` | `rocm7.2.3` | ROCm build variant to match on the index (e.g. `rocm7.14.0`). |
+| `AITER_WHEEL_INDEX` | AMD nightlies page | The amd-aiter wheel index to resolve from. |
 | `IMAGE_TAG` | `nightly-aiter-<aiter-sha>-vllm-<vllm-sha>` | Override the computed tag. |
 | `PUSH_IMAGE` | `true` | `false` builds only. |
 | `PULL_BASE` | `true` | Pull the nightly before building (fails fast on a bad ref). |

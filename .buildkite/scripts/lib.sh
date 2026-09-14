@@ -82,6 +82,56 @@ for t in data.get("results", []):
 '
 }
 
+# resolve_latest_aiter_wheel <index_url> <rocm_variant>
+# Prints the download URL of the newest amd-aiter nightly wheel matching the
+# given ROCm variant (e.g. rocm7.2.3), cp312 / linux_x86_64. Empty on no match.
+#
+# The index is a PEP-503-style page of wheel links; hrefs are URL-encoded
+# (`%2B` for `+`), so we decode the filename for matching but keep the original
+# href for the download URL. "Newest" is the highest PEP 440 version, whose
+# local segment (`...d20260914`) already orders the nightlies by date.
+resolve_latest_aiter_wheel() {
+  local index="$1" variant="$2"
+  python3 - "$index" "$variant" <<'PY'
+import sys, re, urllib.request
+from urllib.parse import urljoin, unquote
+index, variant = sys.argv[1], sys.argv[2]
+if not index.endswith('/'):
+    index += '/'
+data = urllib.request.urlopen(index, timeout=30).read().decode('utf-8', 'replace')
+hrefs = re.findall(r'href=["\']([^"\']+)["\']', data)
+try:
+    from packaging.version import parse as vparse
+    havepkg = True
+except Exception:
+    havepkg = False
+cands = []
+for h in hrefs:
+    fn = unquote(h.split('#')[0].split('/')[-1])
+    if not fn.endswith('cp312-cp312-linux_x86_64.whl'):
+        continue
+    if not re.search(r'\+' + re.escape(variant) + r'\.', fn):
+        continue
+    m = re.match(r'amd_aiter-(.+?)-cp312', fn)
+    if not m:
+        continue
+    ver = m.group(1)
+    if havepkg:
+        try:
+            key = (1, vparse(ver))
+        except Exception:
+            key = (0, ver)
+    else:
+        dm = re.search(r'\.d(\d{8})', ver)
+        key = (0, (dm.group(1) if dm else '0', ver))
+    cands.append((key, h))
+if not cands:
+    sys.exit(0)
+cands.sort(key=lambda x: x[0])
+print(urljoin(index, cands[-1][1]))
+PY
+}
+
 # Reduce a string to something usable inside a docker tag.
 sanitize_tag_component() {
   local s

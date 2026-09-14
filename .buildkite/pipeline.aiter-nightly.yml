@@ -2,10 +2,11 @@
 # published vLLM ROCm nightly, push the result, and kick off perf-eval.
 #
 # This is the lightweight cousin of pipeline.yml's BUILD_BASE path. Instead of
-# recompiling the whole ROCm base to swap AITER (~10h), it overlays a fresh
-# AITER onto the prebuilt nightly image (~1-2h). With no environment variables
-# set it resolves the newest vllm/vllm-openai-rocm:nightly-<sha> and AITER main
-# on its own.
+# recompiling the whole ROCm base to swap AITER (~10h), it overlays the newest
+# published AITER nightly wheel (rocm7.2.3 by default) onto the prebuilt nightly
+# image — no kernel compile, so it's fast. With no environment variables set it
+# resolves the newest vllm/vllm-openai-rocm:nightly-<sha> and the newest AITER
+# wheel on its own.
 #
 # This flow is NOT a separate Buildkite pipeline. The main pipeline.yml is a
 # dispatcher: triggering the existing vllm-perf-build pipeline with
@@ -17,9 +18,10 @@
 # perf-eval reads VLLM_IMAGE and uses its own default workloads, so no
 # PERF_EVAL_WORKLOADS is needed.
 #
-# Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_BRANCH,
-# AITER_COMMIT, AITER_REPO, IMAGE_TAG, PUSH_IMAGE, TRIGGER_PERF_EVAL,
-# PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT. See README.md.
+# Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_WHEEL_URL,
+# AITER_ROCM_VARIANT, AITER_WHEEL_INDEX, IMAGE_TAG, PUSH_IMAGE,
+# TRIGGER_PERF_EVAL, PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT.
+# See README.md.
 #
 # NB: because pipeline.yml uploads this file as a *nested* pipeline, top-level
 # `agents`/`env` blocks don't reliably propagate to these steps on this agent
@@ -45,9 +47,9 @@ steps:
       queue: amd-cpu
     env:
       DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
-    # Pulling the nightly + an AITER kernel compile (PREBUILD_KERNELS=1). The
-    # kernel prebuild can be very slow, so allow up to 8h.
-    timeout_in_minutes: 480
+    # Just pulls the nightly, swaps in a prebuilt AITER wheel (no kernel
+    # compile), and pushes. Dominated by the image pull/push, so 2h is plenty.
+    timeout_in_minutes: 120
     retry:
       automatic:
         - exit_status: -1  # agent lost
