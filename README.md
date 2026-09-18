@@ -118,6 +118,7 @@ perf-eval receives these environment variables:
 | `VLLM_COMMIT` | full vLLM sha the image was built from |
 | `WORKLOADS` | the requested workloads |
 | `UPSTREAM_BUILD_URL` | link back to the build that produced the image |
+| `PERF_EVAL_RUN_TYPE` | forwarded only when set; identifies the run type to perf-eval |
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -129,11 +130,13 @@ perf-eval receives these environment variables:
 | `PERF_EVAL_BRANCH` | `main` | Branch of the perf-eval repo to build. |
 | `PERF_EVAL_IMAGE_VAR` | `VLLM_IMAGE` | Rename if perf-eval reads a different variable for the image. |
 | `PERF_EVAL_WORKLOAD_VAR` | `WORKLOADS` | Rename if perf-eval reads a different variable for the workloads. |
+| `PERF_EVAL_RUN_TYPE` | — | Run type forwarded to perf-eval (e.g. set on the scheduled build). Empty means not sent, so perf-eval's own default applies. |
+| `PERF_EVAL_RUN_TYPE_VAR` | `PERF_EVAL_RUN_TYPE` | Rename if perf-eval reads the run type under a different variable. |
 
 Because the image tag isn't known until the resolve step has run, and a `trigger` step's
 `build.env` is static YAML, the trigger step is generated at runtime by
-`.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names are restricted to
-`[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
+`.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names and the run type
+are restricted to `[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
 
 ## AITER nightly (overlay onto the published nightly)
 

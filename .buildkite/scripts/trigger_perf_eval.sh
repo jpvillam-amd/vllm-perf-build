@@ -27,6 +27,11 @@ PERF_EVAL_BRANCH="${PERF_EVAL_BRANCH:-main}"
 # something other than these.
 PERF_EVAL_IMAGE_VAR="${PERF_EVAL_IMAGE_VAR:-VLLM_IMAGE}"
 PERF_EVAL_WORKLOAD_VAR="${PERF_EVAL_WORKLOAD_VAR:-WORKLOADS}"
+# Run type to forward to perf-eval (e.g. set on the scheduled build). Empty ->
+# not sent, so perf-eval's own default applies. Passed through under the same
+# name by default; override PERF_EVAL_RUN_TYPE_VAR if perf-eval reads another.
+PERF_EVAL_RUN_TYPE="${PERF_EVAL_RUN_TYPE:-}"
+PERF_EVAL_RUN_TYPE_VAR="${PERF_EVAL_RUN_TYPE_VAR:-PERF_EVAL_RUN_TYPE}"
 
 image_ref="$(buildkite-agent meta-data get image-ref)"
 commit="$(buildkite-agent meta-data get vllm-commit)"
@@ -46,6 +51,14 @@ for w in "${workloads[@]:-}"; do
     exit 1
   fi
 done
+
+# Same reasoning as workloads: this is interpolated into generated YAML.
+if [[ -n "$PERF_EVAL_RUN_TYPE" && ! "$PERF_EVAL_RUN_TYPE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  echo "^^^ +++"
+  echo "Invalid PERF_EVAL_RUN_TYPE '${PERF_EVAL_RUN_TYPE}'." >&2
+  echo "Allowed characters: letters, digits, and . _ / -" >&2
+  exit 1
+fi
 
 if [[ "$PERF_EVAL_FANOUT" == "true" && "${#workloads[@]}" -eq 0 ]]; then
   echo "^^^ +++"
@@ -74,6 +87,9 @@ EOF
   if [[ -n "$workload_value" ]]; then
     echo "        ${PERF_EVAL_WORKLOAD_VAR}: \"${workload_value}\"" >>"$steps_file"
   fi
+  if [[ -n "$PERF_EVAL_RUN_TYPE" ]]; then
+    echo "        ${PERF_EVAL_RUN_TYPE_VAR}: \"${PERF_EVAL_RUN_TYPE}\"" >>"$steps_file"
+  fi
 }
 
 echo "steps:" >"$steps_file"
@@ -94,6 +110,7 @@ fi
 echo "Pipeline : ${PERF_EVAL_PIPELINE}"
 echo "Image    : ${image_ref}"
 echo "Workloads: ${PERF_EVAL_WORKLOADS:-<none, perf-eval defaults apply>}"
+echo "Run type : ${PERF_EVAL_RUN_TYPE:-<none, perf-eval default applies>}"
 echo "Async    : ${PERF_EVAL_ASYNC}"
 echo
 echo "Generated steps:"

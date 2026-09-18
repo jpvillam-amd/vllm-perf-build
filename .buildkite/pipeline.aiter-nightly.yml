@@ -20,8 +20,8 @@
 #
 # Common overrides (set on the build / schedule): VLLM_COMMIT, AITER_WHEEL_URL,
 # AITER_ROCM_VARIANT, AITER_WHEEL_INDEX, IMAGE_TAG, PUSH_IMAGE,
-# TRIGGER_PERF_EVAL, PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT.
-# See README.md.
+# TRIGGER_PERF_EVAL, PERF_EVAL_BRANCH, PERF_EVAL_WORKLOADS, PERF_EVAL_FANOUT,
+# PERF_EVAL_RUN_TYPE. See README.md.
 #
 # NB: because pipeline.yml uploads this file as a *nested* pipeline, top-level
 # `agents`/`env` blocks don't reliably propagate to these steps on this agent
