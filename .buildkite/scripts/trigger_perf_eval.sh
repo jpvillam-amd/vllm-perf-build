@@ -35,6 +35,14 @@ short_commit="${commit:0:8}"
 # Workloads may be comma- or whitespace-separated.
 read -r -a workloads <<< "$(printf '%s' "$PERF_EVAL_WORKLOADS" | tr ',' ' ' | tr -s '[:space:]' ' ')"
 
+# perf-eval splits WORKLOADS on commas and newlines only, so hand the list back
+# as commas. Joining on spaces (the default for "${array[*]}") arrives there as
+# one unmatchable name and the build generates no workload steps at all.
+join_commas() {
+  local IFS=','
+  echo "$*"
+}
+
 # These names are interpolated into generated YAML, so keep them to a charset
 # that cannot break out of a quoted scalar.
 for w in "${workloads[@]:-}"; do
@@ -85,7 +93,7 @@ if [[ "$PERF_EVAL_FANOUT" == "true" ]]; then
   done
 else
   echo "--- :chart_with_upwards_trend: Triggering a single perf-eval build"
-  emit_trigger "" "${workloads[*]:-}"
+  emit_trigger "" "$(join_commas "${workloads[@]:-}")"
 fi
 
 echo "Pipeline : ${PERF_EVAL_PIPELINE}"
