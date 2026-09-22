@@ -108,6 +108,7 @@ the pipeline triggers the `perf-eval` pipeline against it:
 ```
 TRIGGER_PERF_EVAL=true
 PERF_EVAL_WORKLOADS=llama3-8b-throughput,mixtral-latency
+PERF_EVAL_RUN_TYPE=rc
 ```
 
 perf-eval receives these environment variables:
@@ -116,8 +117,13 @@ perf-eval receives these environment variables:
 | --- | --- |
 | `VLLM_IMAGE` | the image just pushed, e.g. `rocm/vllm-dev:pr-12345-abc123de` |
 | `VLLM_COMMIT` | full vLLM sha the image was built from |
-| `WORKLOADS` | the requested workloads |
+| `WORKLOADS` | the requested workloads, comma-separated |
+| `PERF_EVAL_RUN_TYPE` | the run's label, when one was set |
 | `UPSTREAM_BUILD_URL` | link back to the build that produced the image |
+
+A trigger step passes only the variables it names, so anything perf-eval should
+see has to be in that list. Setting a variable on *this* build does not reach
+the downstream one.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -127,13 +133,16 @@ perf-eval receives these environment variables:
 | `PERF_EVAL_FANOUT` | `false` | `true` triggers one perf-eval build per workload instead of one build receiving the whole list. |
 | `PERF_EVAL_ASYNC` | `true` | `true` fires and forgets; `false` makes this build wait for perf-eval and inherit its pass/fail. |
 | `PERF_EVAL_BRANCH` | `main` | Branch of the perf-eval repo to build. |
+| `PERF_EVAL_RUN_TYPE` | — | Labels the run (`nightly`, `rc`, `aiter-nightly`, ...) so the dashboard can group like with like. Unset means perf-eval files it under `adhoc`. |
 | `PERF_EVAL_IMAGE_VAR` | `VLLM_IMAGE` | Rename if perf-eval reads a different variable for the image. |
 | `PERF_EVAL_WORKLOAD_VAR` | `WORKLOADS` | Rename if perf-eval reads a different variable for the workloads. |
 
 Because the image tag isn't known until the resolve step has run, and a `trigger` step's
 `build.env` is static YAML, the trigger step is generated at runtime by
-`.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names are restricted to
-`[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
+`.buildkite/scripts/trigger_perf_eval.sh` and uploaded. Workload names and the run type
+are restricted to `[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
+`.buildkite/scripts/test_trigger_perf_eval.sh` exercises that script against a stubbed
+`buildkite-agent` and needs no Buildkite access; run it directly.
 
 ## Setup
 

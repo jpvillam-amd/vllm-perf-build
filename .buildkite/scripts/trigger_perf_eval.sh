@@ -23,6 +23,11 @@ PERF_EVAL_FANOUT="${PERF_EVAL_FANOUT:-false}"
 # inherits its pass/fail.
 PERF_EVAL_ASYNC="${PERF_EVAL_ASYNC:-true}"
 PERF_EVAL_BRANCH="${PERF_EVAL_BRANCH:-main}"
+# Labels the downstream run ("nightly", "rc", "aiter-nightly", ...) so the
+# dashboard can group like with like. A trigger step passes only what it names
+# here, so setting this on *this* build is not enough to reach perf-eval.
+# Unset leaves it off the build, and perf-eval files the run under "adhoc".
+PERF_EVAL_RUN_TYPE="${PERF_EVAL_RUN_TYPE:-}"
 # Names of the env vars perf-eval expects. Override if that pipeline reads
 # something other than these.
 PERF_EVAL_IMAGE_VAR="${PERF_EVAL_IMAGE_VAR:-VLLM_IMAGE}"
@@ -43,17 +48,26 @@ join_commas() {
   echo "$*"
 }
 
-# These names are interpolated into generated YAML, so keep them to a charset
+# These values are interpolated into generated YAML, so keep them to a charset
 # that cannot break out of a quoted scalar.
-for w in "${workloads[@]:-}"; do
-  [[ -z "$w" ]] && continue
-  if [[ ! "$w" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+require_safe() {
+  local kind="$1" value="$2"
+  if [[ ! "$value" =~ ^[A-Za-z0-9._/-]+$ ]]; then
     echo "^^^ +++"
-    echo "Invalid workload name '${w}'." >&2
+    echo "Invalid ${kind} '${value}'." >&2
     echo "Allowed characters: letters, digits, and . _ / -" >&2
     exit 1
   fi
+}
+
+for w in "${workloads[@]:-}"; do
+  [[ -z "$w" ]] && continue
+  require_safe "workload name" "$w"
 done
+
+if [[ -n "$PERF_EVAL_RUN_TYPE" ]]; then
+  require_safe "run type" "$PERF_EVAL_RUN_TYPE"
+fi
 
 if [[ "$PERF_EVAL_FANOUT" == "true" && "${#workloads[@]}" -eq 0 ]]; then
   echo "^^^ +++"
@@ -82,6 +96,9 @@ EOF
   if [[ -n "$workload_value" ]]; then
     echo "        ${PERF_EVAL_WORKLOAD_VAR}: \"${workload_value}\"" >>"$steps_file"
   fi
+  if [[ -n "$PERF_EVAL_RUN_TYPE" ]]; then
+    echo "        PERF_EVAL_RUN_TYPE: \"${PERF_EVAL_RUN_TYPE}\"" >>"$steps_file"
+  fi
 }
 
 echo "steps:" >"$steps_file"
@@ -99,6 +116,7 @@ fi
 echo "Pipeline : ${PERF_EVAL_PIPELINE}"
 echo "Image    : ${image_ref}"
 echo "Workloads: ${PERF_EVAL_WORKLOADS:-<none, perf-eval defaults apply>}"
+echo "Run type : ${PERF_EVAL_RUN_TYPE:-<none, perf-eval records it as adhoc>}"
 echo "Async    : ${PERF_EVAL_ASYNC}"
 echo
 echo "Generated steps:"

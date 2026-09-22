@@ -96,10 +96,32 @@ check "image is passed through" \
 check "branch is passed through" \
   "$(grep -c 'branch: "micah/migrate-vllm-dashboard-nightly"' <<<"$(uploaded)")" "1"
 
-# Names that could break out of the generated YAML are still refused.
+# A trigger step forwards only the variables it names, so the run type has to
+# be written into the downstream build explicitly.
+run_type_line() {
+  grep -E "^\s+PERF_EVAL_RUN_TYPE:" <<<"$1" | sed 's/^[[:space:]]*//' | tr '\n' '|'
+}
+
+run env PERF_EVAL_WORKLOADS="a" PERF_EVAL_RUN_TYPE="aiter-nightly"
+check "run type reaches the downstream build" \
+  "$(run_type_line "$(uploaded)")" 'PERF_EVAL_RUN_TYPE: "aiter-nightly"|'
+
+run env PERF_EVAL_WORKLOADS="a"
+check "no run type leaves the variable off" "$(run_type_line "$(uploaded)")" ""
+
+# Fan-out labels every build it starts.
+run env PERF_EVAL_WORKLOADS="a,b" PERF_EVAL_FANOUT=true PERF_EVAL_RUN_TYPE="nightly-rocm10"
+check "fanout labels each build" "$(run_type_line "$(uploaded)")" \
+  'PERF_EVAL_RUN_TYPE: "nightly-rocm10"|PERF_EVAL_RUN_TYPE: "nightly-rocm10"|'
+
+# Values that could break out of the generated YAML are still refused.
 run env PERF_EVAL_WORKLOADS='ok_name,bad"name'
 check "invalid workload name is rejected" "$(grep -c 'Invalid workload name' <<<"$(output)")" "1"
 check "invalid workload name uploads nothing" "$(uploaded)" ""
+
+run env PERF_EVAL_WORKLOADS="a" PERF_EVAL_RUN_TYPE='bad" nightly'
+check "invalid run type is rejected" "$(grep -c 'Invalid run type' <<<"$(output)")" "1"
+check "invalid run type uploads nothing" "$(uploaded)" ""
 
 # The master switch still short-circuits.
 TRIGGER_PERF_EVAL=false bash "$SCRIPT" >"$WORK/stdout" 2>&1
