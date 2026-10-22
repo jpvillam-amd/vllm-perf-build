@@ -184,8 +184,10 @@ compatible wheel gives no numbers rather than wrong ones.
 - **Manual test:** `FLOW=aiter-nightly`. Add `PUSH_IMAGE=false`, without
   `TRIGGER_PERF_EVAL`, for a build-only smoke test.
 - **Nightly:** a Schedule (`0 2 * * *` America/Chicago) with `FLOW=aiter-nightly`,
-  `TRIGGER_PERF_EVAL=true`, and `PERF_EVAL_BRANCH` and `PERF_EVAL_WORKLOADS` matching
-  perf-eval's own nightly baseline schedule, so the two runs differ only in AITER.
+  `TRIGGER_PERF_EVAL=true`, `PERF_EVAL_RUN_TYPE=aiter-nightly`, and `PERF_EVAL_BRANCH`
+  and `PERF_EVAL_WORKLOADS` matching perf-eval's own nightly baseline schedule, so the
+  two runs differ only in AITER. Manual runs without `PERF_EVAL_RUN_TYPE` are filed
+  under `adhoc`.
 
 Without `PERF_EVAL_WORKLOADS`, perf-eval runs its default ROCm workloads. The step
 removes the images it pulled and built when it finishes.
@@ -194,7 +196,6 @@ removes the images it pulled and built when it finishes.
 | --- | --- | --- |
 | `VLLM_COMMIT` | newest nightly | Pin the nightly (full 40-character sha, 2026-10-12 or later, since the selector is fetched at it). |
 | `PUSH_IMAGE` | `true` | `false` builds only. Ignored when `TRIGGER_PERF_EVAL=true`. |
-| `PERF_EVAL_RUN_TYPE` | `aiter-nightly` | Run label for the dashboard. |
 
 The other perf-eval variables apply as above.
 

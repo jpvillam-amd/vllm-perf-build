@@ -39,6 +39,4 @@ steps:
     command: ".buildkite/scripts/trigger_perf_eval.sh"
     agents:
       queue: amd-cpu
-    env:
-      PERF_EVAL_RUN_TYPE: "${PERF_EVAL_RUN_TYPE:-aiter-nightly}"
     timeout_in_minutes: 10
