@@ -3,6 +3,18 @@
 Buildkite pipeline that builds a vLLM ROCm docker image from any vLLM PR, branch, or
 commit and publishes it to [`rocm/vllm-dev`](https://hub.docker.com/r/rocm/vllm-dev).
 
+## Flows
+
+`FLOW` on the build picks what runs. `pipeline.yml` only picks the flow; each flow's
+steps live in their own file:
+
+| `FLOW` | Steps | Runs |
+| --- | --- | --- |
+| unset | `pipeline.source.yml` | Build vLLM from source for a PR, branch or commit. Takes hours; much longer with `BUILD_BASE=true`. |
+| `aiter-nightly` | `pipeline.aiter-nightly.yml` | Install the newest matching AITER nightly wheel over the latest vLLM ROCm nightly. No compile. See [AITER nightly](#aiter-nightly). |
+
+Any other value fails the first step, so a typo cannot start a source build.
+
 ## Triggering a build
 
 Start a build on the Buildkite pipeline and set **one** of these environment variables:
@@ -54,7 +66,7 @@ variables:
 | `IMAGE_REPO` | `rocm/vllm-dev` | Destination repo. |
 | `DOCKERHUB_USER` | `jpvillam` | Docker Hub account used to push. |
 | `DOCKERHUB_TOKEN_SECRET` | `dockerhub_token` | Name of the Buildkite secret holding the access token. |
-| `PUSH_IMAGE` | `true` | Set `false` to build only, as a "does this PR still build" gate. |
+| `PUSH_IMAGE` | `true` | Set `false` to build only, as a "does this PR still build" gate. Ignored when `TRIGGER_PERF_EVAL=true`. |
 | `EXTRA_BUILD_ARGS` | — | Space-separated extra `--build-arg`s, e.g. `NIC_BACKEND=none USE_SCCACHE=1`. |
 | `CLONE_DEPTH` | `1` | Shallow clone depth for the vLLM checkout. |
 
@@ -115,7 +127,7 @@ perf-eval receives these environment variables:
 
 | Variable | Value |
 | --- | --- |
-| `VLLM_IMAGE` | the image just pushed, e.g. `rocm/vllm-dev:pr-12345-abc123de` |
+| `VLLM_IMAGE_ROCM` | the image just pushed, e.g. `rocm/vllm-dev:pr-12345-abc123de`. perf-eval runs it on ROCm workloads only. |
 | `VLLM_COMMIT` | full vLLM sha the image was built from |
 | `WORKLOADS` | the requested workloads, comma-separated |
 | `PERF_EVAL_RUN_TYPE` | the run's label, when one was set |
@@ -127,15 +139,13 @@ the downstream one.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TRIGGER_PERF_EVAL` | `false` | Master switch. |
+| `TRIGGER_PERF_EVAL` | `false` | Master switch. Also forces the image push, since perf-eval pulls it. |
 | `PERF_EVAL_PIPELINE` | `perf-eval` | Downstream pipeline slug. |
 | `PERF_EVAL_WORKLOADS` | — | Comma- or space-separated workload names. |
 | `PERF_EVAL_FANOUT` | `false` | `true` triggers one perf-eval build per workload instead of one build receiving the whole list. |
 | `PERF_EVAL_ASYNC` | `true` | `true` fires and forgets; `false` makes this build wait for perf-eval and inherit its pass/fail. |
 | `PERF_EVAL_BRANCH` | `main` | Branch of the perf-eval repo to build. |
 | `PERF_EVAL_RUN_TYPE` | — | Labels the run (`nightly`, `rc`, `aiter-nightly`, ...) so the dashboard can group like with like. Unset means perf-eval files it under `adhoc`. |
-| `PERF_EVAL_IMAGE_VAR` | `VLLM_IMAGE` | Rename if perf-eval reads a different variable for the image. |
-| `PERF_EVAL_WORKLOAD_VAR` | `WORKLOADS` | Rename if perf-eval reads a different variable for the workloads. |
 
 Because the image tag isn't known until the resolve step has run, and a `trigger` step's
 `build.env` is static YAML, the trigger step is generated at runtime by
@@ -143,6 +153,51 @@ Because the image tag isn't known until the resolve step has run, and a `trigger
 are restricted to `[A-Za-z0-9._/-]` so they cannot break out of the generated YAML.
 `.buildkite/scripts/test_trigger_perf_eval.sh` exercises that script against a stubbed
 `buildkite-agent` and needs no Buildkite access; run it directly.
+
+## AITER nightly
+
+`FLOW=aiter-nightly` on a `vllm-perf-build` build uploads
+`.buildkite/pipeline.aiter-nightly.yml` instead of `pipeline.source.yml`. It:
+
+1. resolves the newest `vllm/vllm-openai-rocm:nightly-<sha>` (or `VLLM_COMMIT`),
+2. picks the AITER nightly wheel built for that image's ROCm, torch and Python,
+3. `pip install`s it over the image, as vLLM CI's `aiter-nightly-overlay.sh` does,
+4. pushes `rocm/vllm-dev:nightly-aiter-<aiter-sha>-vllm-<vllm-sha>`,
+5. with `TRIGGER_PERF_EVAL=true`, triggers perf-eval as above.
+
+The wheel is picked by vLLM's
+[`select_aiter_nightly_wheel.py`](https://github.com/vllm-project/vllm/blob/main/.buildkite/scripts/rocm/select_aiter_nightly_wheel.py),
+the selector vLLM CI uses for `AITER_NIGHTLY=1`, fetched at the image's vLLM commit and
+run inside the image. It takes the newest exact match on
+<https://rocm.frameworks-nightlies.amd.com/whl-multi-arch/amd-aiter/>, so this flow and
+vLLM CI can differ if a new wheel lands between their runs.
+
+| Exit | Meaning |
+| --- | --- |
+| 10 | No wheel matches. The annotation lists what the index has, e.g. `No AITER nightly for rocm10.0.0/torch2.12/cp312. Available: rocm10.0.0/torch2.13/cp312, ...` |
+| 11 | The wheel does not install. |
+| 1 | Fetch or registry error. Retried once, with the same wheel. |
+
+On 10 or 11 nothing is pushed and perf-eval is not triggered, so a night without a
+compatible wheel gives no numbers rather than wrong ones.
+
+- **Manual test:** `FLOW=aiter-nightly`. Add `PUSH_IMAGE=false`, without
+  `TRIGGER_PERF_EVAL`, for a build-only smoke test.
+- **Nightly:** a Schedule (`0 2 * * *` America/Chicago) with `FLOW=aiter-nightly`,
+  `TRIGGER_PERF_EVAL=true`, `PERF_EVAL_RUN_TYPE=aiter-nightly`, and `PERF_EVAL_BRANCH`
+  and `PERF_EVAL_WORKLOADS` matching perf-eval's own nightly baseline schedule, so the
+  two runs differ only in AITER. Manual runs without `PERF_EVAL_RUN_TYPE` are filed
+  under `adhoc`.
+
+Without `PERF_EVAL_WORKLOADS`, perf-eval runs its default ROCm workloads. The step
+removes the images it pulled and built when it finishes.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VLLM_COMMIT` | newest nightly | Pin the nightly (full 40-character sha, 2026-10-12 or later, since the selector is fetched at it). |
+| `PUSH_IMAGE` | `true` | `false` builds only. Ignored when `TRIGGER_PERF_EVAL=true`. |
+
+The other perf-eval variables apply as above.
 
 ## Setup
 

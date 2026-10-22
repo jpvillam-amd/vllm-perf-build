@@ -1,0 +1,42 @@
+# AITER nightly: install the newest AITER nightly wheel that fits the latest
+# vllm/vllm-openai-rocm nightly, push it, and optionally trigger perf-eval.
+# pipeline.yml uploads this when FLOW=aiter-nightly. See README.md.
+#
+# Every step sets its own agents and env: top-level blocks do not reach a
+# nested upload on this agent version.
+
+steps:
+  - label: ":mag: Resolve vLLM nightly"
+    key: "resolve-nightly"
+    command: ".buildkite/scripts/resolve_nightly.sh"
+    agents:
+      queue: amd-cpu
+    timeout_in_minutes: 10
+
+  - label: ":docker: Select AITER wheel, build & push overlay"
+    key: "overlay"
+    depends_on: "resolve-nightly"
+    command: ".buildkite/scripts/build_aiter_overlay.sh"
+    agents:
+      queue: amd-cpu
+    env:
+      DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
+    timeout_in_minutes: 120
+    # Exit 1 is transient and retried once, as in vLLM CI. 10 and 11 are not:
+    # a retry would fail the same way.
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 1
+        - exit_status: -1  # agent lost
+          limit: 2
+        - exit_status: 255 # agent forced shutdown
+          limit: 2
+
+  - label: ":chart_with_upwards_trend: Trigger perf-eval"
+    key: "perf-eval"
+    depends_on: "overlay"
+    command: ".buildkite/scripts/trigger_perf_eval.sh"
+    agents:
+      queue: amd-cpu
+    timeout_in_minutes: 10

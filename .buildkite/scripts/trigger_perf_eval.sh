@@ -28,10 +28,6 @@ PERF_EVAL_BRANCH="${PERF_EVAL_BRANCH:-main}"
 # here, so setting this on *this* build is not enough to reach perf-eval.
 # Unset leaves it off the build, and perf-eval files the run under "adhoc".
 PERF_EVAL_RUN_TYPE="${PERF_EVAL_RUN_TYPE:-}"
-# Names of the env vars perf-eval expects. Override if that pipeline reads
-# something other than these.
-PERF_EVAL_IMAGE_VAR="${PERF_EVAL_IMAGE_VAR:-VLLM_IMAGE}"
-PERF_EVAL_WORKLOAD_VAR="${PERF_EVAL_WORKLOAD_VAR:-WORKLOADS}"
 
 image_ref="$(buildkite-agent meta-data get image-ref)"
 commit="$(buildkite-agent meta-data get vllm-commit)"
@@ -89,12 +85,12 @@ emit_trigger() {
       branch: "${PERF_EVAL_BRANCH}"
       message: "perf-eval for ${image_ref} (vLLM ${short_commit})${suffix}"
       env:
-        ${PERF_EVAL_IMAGE_VAR}: "${image_ref}"
+        VLLM_IMAGE_ROCM: "${image_ref}"
         VLLM_COMMIT: "${commit}"
         UPSTREAM_BUILD_URL: "${BUILDKITE_BUILD_URL:-}"
 EOF
   if [[ -n "$workload_value" ]]; then
-    echo "        ${PERF_EVAL_WORKLOAD_VAR}: \"${workload_value}\"" >>"$steps_file"
+    echo "        WORKLOADS: \"${workload_value}\"" >>"$steps_file"
   fi
   if [[ -n "$PERF_EVAL_RUN_TYPE" ]]; then
     echo "        PERF_EVAL_RUN_TYPE: \"${PERF_EVAL_RUN_TYPE}\"" >>"$steps_file"

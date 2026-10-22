@@ -1,0 +1,16 @@
+# Install an AITER nightly wheel over a published vLLM ROCm nightly.
+# build_aiter_overlay.sh passes all three build args.
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG AITER_WHEEL_URL
+ARG VLLM_COMMIT=unknown
+
+# Installed exactly as vLLM CI's aiter-nightly-overlay.sh does.
+RUN python3 -m pip install --no-cache-dir "${AITER_WHEEL_URL}" \
+    && python3 -m pip show amd-aiter | grep -i '^Version:'
+
+RUN mkdir -p /app \
+    && printf 'VLLM_COMMIT: %s\nAITER_WHEEL_URL: %s\n' \
+       "${VLLM_COMMIT}" "${AITER_WHEEL_URL}" >> /app/versions.txt
