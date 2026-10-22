@@ -47,9 +47,6 @@ steps:
     env:
       DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
     timeout_in_minutes: 300
-    # A HIP kernel build is long and occasionally hits transient network
-    # failures pulling the base image or cloning vLLM. Retry the whole step
-    # rather than leaving a half-built image behind.
     retry:
       automatic:
         - exit_status: -1  # agent lost
