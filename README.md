@@ -1,6 +1,7 @@
 # vllm-perf-build
 
-Buildkite pipeline that builds vLLM ROCm docker images and publishes them to
+Buildkite pipeline that builds vLLM ROCm docker images from any vLLM PR, branch, or
+commit (or overlays an AITER nightly onto the vLLM nightly) and publishes them to
 [`rocm/vllm-dev`](https://hub.docker.com/r/rocm/vllm-dev).
 
 ## Flows
@@ -22,7 +23,7 @@ Set **one** of these on the build (none builds `main`):
 | --- | --- | --- |
 | `VLLM_PR` | `12345` | `refs/pull/12345/head` on `vllm-project/vllm`, fork PRs included |
 | `VLLM_BRANCH` | `my-feature` | that branch |
-| `VLLM_COMMIT` | `a1b2c3d...` | that commit |
+| `VLLM_COMMIT` | `a1b2c3d...` | that exact commit |
 
 Via the API:
 
@@ -32,7 +33,8 @@ curl -X POST "https://api.buildkite.com/v2/organizations/<org>/pipelines/vllm-pe
   -d '{"commit":"HEAD","branch":"main","env":{"VLLM_PR":"12345"}}'
 ```
 
-The image tag is the ref plus the resolved short sha:
+The image tag is the ref plus the resolved short sha, so every build is traceable
+to an exact vLLM commit:
 
 | Trigger | Tag |
 | --- | --- |
@@ -40,7 +42,8 @@ The image tag is the ref plus the resolved short sha:
 | `VLLM_BRANCH=my-feature` | `rocm/vllm-dev:my-feature-<short-sha>` |
 | `VLLM_COMMIT=a1b2c3d…` | `rocm/vllm-dev:commit-<short-sha>` |
 
-`IMAGE_TAG` replaces the tag; `EXTRA_IMAGE_TAGS` (space-separated) adds more.
+`IMAGE_TAG` replaces the tag; `EXTRA_IMAGE_TAGS` (space-separated) adds additional
+tags alongside the primary one.
 
 ## Configuration
 
