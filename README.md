@@ -6,12 +6,13 @@ commit (or overlays an AITER nightly onto the vLLM nightly) and publishes them t
 
 ## Flows
 
-`FLOW` on the build picks what runs:
+`FLOW` on the build picks what runs. `pipeline.yml` only picks the flow; each flow's
+steps live in their own file:
 
-| `FLOW` | Runs |
-| --- | --- |
-| unset | Build vLLM from source for a PR, branch or commit. Takes hours; much longer with `BUILD_BASE=true`. |
-| `aiter-nightly` | Install the newest matching AITER nightly wheel over the latest vLLM ROCm nightly. No compile. See [AITER nightly](#aiter-nightly). |
+| `FLOW` | Steps | Runs |
+| --- | --- | --- |
+| unset | `pipeline.source.yml` | Build vLLM from source for a PR, branch or commit. Takes hours; much longer with `BUILD_BASE=true`. |
+| `aiter-nightly` | `pipeline.aiter-nightly.yml` | Install the newest matching AITER nightly wheel over the latest vLLM ROCm nightly. No compile. See [AITER nightly](#aiter-nightly). |
 
 Any other value fails the first step, so a typo cannot start a source build.
 
@@ -137,7 +138,7 @@ stubbed `buildkite-agent`; run it directly.
 ## AITER nightly
 
 `FLOW=aiter-nightly` on a `vllm-perf-build` build uploads
-`.buildkite/pipeline.aiter-nightly.yml` instead of the source build. It:
+`.buildkite/pipeline.aiter-nightly.yml` instead of `pipeline.source.yml`. It:
 
 1. resolves the newest `vllm/vllm-openai-rocm:nightly-<sha>` (or `VLLM_COMMIT`),
 2. picks the AITER nightly wheel built for that image's ROCm, torch and Python,

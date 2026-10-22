@@ -34,8 +34,7 @@ steps:
           limit: 2
 
   - label: ":chart_with_upwards_trend: Trigger perf-eval"
-    # Not "perf-eval": pipeline.yml's skipped step already holds that key.
-    key: "aiter-perf-eval"
+    key: "perf-eval"
     depends_on: "overlay"
     command: ".buildkite/scripts/trigger_perf_eval.sh"
     agents:
