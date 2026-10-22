@@ -10,6 +10,14 @@ VLLM_BRANCH="${VLLM_BRANCH:-}"
 VLLM_COMMIT="${VLLM_COMMIT:-}"
 IMAGE_REPO="${IMAGE_REPO:-rocm/vllm-dev}"
 
+# pipeline.yml runs this flow for any FLOW other than aiter-nightly, so a typo
+# such as FLOW=aiter_nightly would otherwise start an hours-long build.
+if [[ -n "${FLOW:-}" ]]; then
+  echo "^^^ +++"
+  echo "Unknown FLOW '${FLOW}'. Leave it unset to build vLLM from source, or set FLOW=aiter-nightly." >&2
+  exit 1
+fi
+
 # Docker tags allow [a-zA-Z0-9_.-], must start alphanumeric, max 128 chars.
 sanitize_tag_component() {
   local s
