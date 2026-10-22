@@ -85,8 +85,6 @@ emit_trigger() {
       branch: "${PERF_EVAL_BRANCH}"
       message: "perf-eval for ${image_ref} (vLLM ${short_commit})${suffix}"
       env:
-        # Not VLLM_IMAGE: this image is ROCm-only, and perf-eval would run
-        # VLLM_IMAGE on its CUDA workloads too.
         VLLM_IMAGE_ROCM: "${image_ref}"
         VLLM_COMMIT: "${commit}"
         UPSTREAM_BUILD_URL: "${BUILDKITE_BUILD_URL:-}"
