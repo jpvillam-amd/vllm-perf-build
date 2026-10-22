@@ -95,8 +95,6 @@ check "image is passed as the ROCm image" \
 check "perf-eval runs from main by default" \
   "$(grep -c 'branch: "main"' <<<"$(uploaded)")" "1"
 
-# The AITER nightly schedule runs perf-eval from a branch whose AMD workloads
-# main lacks, so losing the override would fail it on unknown workload names.
 run env PERF_EVAL_WORKLOADS="a" PERF_EVAL_BRANCH="micah/migrate-vllm-dashboard-nightly"
 check "branch override is passed through" \
   "$(grep -c 'branch: "micah/migrate-vllm-dashboard-nightly"' <<<"$(uploaded)")" "1"
