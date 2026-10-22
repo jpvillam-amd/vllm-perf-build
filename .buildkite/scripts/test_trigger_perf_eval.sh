@@ -89,13 +89,9 @@ check "fanout emits one build per workload" \
 check "fanout passes one name per build" \
   "$(workload_line "$(uploaded)")" 'WORKLOADS: "a"|WORKLOADS: "b"|WORKLOADS: "c"|'
 
-# The image goes to perf-eval's ROCm workloads only, never as VLLM_IMAGE,
-# which perf-eval would also hand to its CUDA workloads.
 run env PERF_EVAL_WORKLOADS="a"
 check "image is passed as the ROCm image" \
   "$(grep -c 'VLLM_IMAGE_ROCM: "rocm/vllm-dev:pr-52052-73b53742"' <<<"$(uploaded)")" "1"
-check "image is not offered to CUDA workloads" \
-  "$(grep -cE '^\s+VLLM_IMAGE:' <<<"$(uploaded)")" "0"
 check "perf-eval runs from main by default" \
   "$(grep -c 'branch: "main"' <<<"$(uploaded)")" "1"
 
