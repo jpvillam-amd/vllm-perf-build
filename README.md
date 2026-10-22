@@ -163,11 +163,12 @@ compatible wheel gives no numbers rather than wrong ones.
 
 - **Manual test:** `FLOW=aiter-nightly`. Add `PUSH_IMAGE=false`, without
   `TRIGGER_PERF_EVAL`, for a build-only smoke test.
-- **Nightly:** a Schedule (`0 7 * * *`) with `FLOW=aiter-nightly` and
-  `TRIGGER_PERF_EVAL=true`.
+- **Nightly:** a Schedule (`0 2 * * *` America/Chicago) with `FLOW=aiter-nightly`,
+  `TRIGGER_PERF_EVAL=true`, and `PERF_EVAL_BRANCH` and `PERF_EVAL_WORKLOADS` matching
+  perf-eval's own nightly baseline schedule, so the two runs differ only in AITER.
 
-perf-eval runs its default ROCm workloads. The step removes the images it pulled and
-built when it finishes.
+Without `PERF_EVAL_WORKLOADS`, perf-eval runs its default ROCm workloads. The step
+removes the images it pulled and built when it finishes.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
