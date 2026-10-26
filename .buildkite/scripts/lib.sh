@@ -34,6 +34,19 @@ fetch_vllm_source() {
   echo "Checked out $(git -C "$dest" rev-parse HEAD)"
 }
 
+# Prints whether to push the image. perf-eval pulls the image it is handed, so
+# TRIGGER_PERF_EVAL=true pushes even when PUSH_IMAGE=false.
+push_image() {
+  if [[ "${TRIGGER_PERF_EVAL:-false}" == "true" ]]; then
+    if [[ "${PUSH_IMAGE:-true}" != "true" ]]; then
+      echo "TRIGGER_PERF_EVAL=true: pushing despite PUSH_IMAGE=${PUSH_IMAGE}." >&2
+    fi
+    echo true
+  else
+    echo "${PUSH_IMAGE:-true}"
+  fi
+}
+
 # find_dockerfile <checkout> <candidate>... -> prints the first that exists
 find_dockerfile() {
   local dest="$1"; shift

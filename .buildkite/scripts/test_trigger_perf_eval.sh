@@ -89,11 +89,14 @@ check "fanout emits one build per workload" \
 check "fanout passes one name per build" \
   "$(workload_line "$(uploaded)")" 'WORKLOADS: "a"|WORKLOADS: "b"|WORKLOADS: "c"|'
 
-# The image and branch still ride along.
+run env PERF_EVAL_WORKLOADS="a"
+check "image is passed as the ROCm image" \
+  "$(grep -c 'VLLM_IMAGE_ROCM: "rocm/vllm-dev:pr-52052-73b53742"' <<<"$(uploaded)")" "1"
+check "perf-eval runs from main by default" \
+  "$(grep -c 'branch: "main"' <<<"$(uploaded)")" "1"
+
 run env PERF_EVAL_WORKLOADS="a" PERF_EVAL_BRANCH="micah/migrate-vllm-dashboard-nightly"
-check "image is passed through" \
-  "$(grep -c 'VLLM_IMAGE: "rocm/vllm-dev:pr-52052-73b53742"' <<<"$(uploaded)")" "1"
-check "branch is passed through" \
+check "branch override is passed through" \
   "$(grep -c 'branch: "micah/migrate-vllm-dashboard-nightly"' <<<"$(uploaded)")" "1"
 
 # A trigger step forwards only the variables it names, so the run type has to
@@ -122,6 +125,14 @@ check "invalid workload name uploads nothing" "$(uploaded)" ""
 run env PERF_EVAL_WORKLOADS="a" PERF_EVAL_RUN_TYPE='bad" nightly'
 check "invalid run type is rejected" "$(grep -c 'Invalid run type' <<<"$(output)")" "1"
 check "invalid run type uploads nothing" "$(uploaded)" ""
+
+# Triggering perf-eval pushes the image whatever PUSH_IMAGE says.
+source "$HERE/lib.sh"
+check "trigger forces a push" \
+  "$(TRIGGER_PERF_EVAL=true PUSH_IMAGE=false push_image 2>/dev/null)" "true"
+check "push_image honours PUSH_IMAGE otherwise" \
+  "$(TRIGGER_PERF_EVAL=false PUSH_IMAGE=false push_image)" "false"
+check "push_image defaults to true" "$(unset PUSH_IMAGE TRIGGER_PERF_EVAL; push_image)" "true"
 
 # The master switch still short-circuits.
 TRIGGER_PERF_EVAL=false bash "$SCRIPT" >"$WORK/stdout" 2>&1
