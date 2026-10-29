@@ -10,9 +10,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 BUILD_BASE="${BUILD_BASE:-false}"
 
 if [[ "$BUILD_BASE" != "true" ]]; then
-  echo "BUILD_BASE is '${BUILD_BASE}' — the main build will use the prebuilt"
-  echo "${BASE_IMAGE:-rocm/vllm-dev:base}. Set BUILD_BASE=true to build a base"
-  echo "image with a specific AITER."
+  echo "BUILD_BASE is '${BUILD_BASE}' — the main build will use a prebuilt base"
+  echo "(${BASE_IMAGE:-vLLM CI's stack for the commit, or rocm/vllm-dev:base for older commits})."
+  echo "Set BUILD_BASE=true to build a base image with a specific AITER."
   exit 0
 fi
 
@@ -41,7 +41,7 @@ if [[ "$PUSH_IMAGE" == "true" && -z "$DOCKERHUB_USER" ]]; then
 fi
 
 vllm_repo="$(buildkite-agent meta-data get vllm-repo)"
-vllm_ref="$(buildkite-agent meta-data get vllm-ref)"
+vllm_ref="$(buildkite-agent meta-data get vllm-ref --default "")"
 commit="$(buildkite-agent meta-data get vllm-commit)"
 short_commit="${commit:0:8}"
 
