@@ -68,23 +68,23 @@ uses_stack_context() {
   grep -qE '^FROM[[:space:]]+stack([[:space:]]|$)' "$1"
 }
 
-# rocm_content_keys <checkout> -> prints "<Ks> <Kr>"
-# The stack and runtime keys vLLM CI tags its prebuilt images with
-# (stack-rocm-<Ks>, runtime-rocm-<Kr>). Must match the "Content keys" section
-# of .buildkite/scripts/rocm/build.sh in vLLM; if that recipe changes, the
+# rocm_content_keys <checkout> -> prints "<stack-key> <runtime-key>"
+# The hashes vLLM CI tags its prebuilt images with (stack-rocm-<stack-key>,
+# runtime-rocm-<runtime-key>). Must match the "Content keys" section of
+# .buildkite/scripts/rocm/build.sh in vLLM (Ks, Kr); if that recipe changes, the
 # lookups miss and the build compiles the stack and runtime itself.
 rocm_content_keys() {
-  local src="$1" ks kr
-  ks="$( { echo "layers: zstd-3, mtimes kept"
+  local src="$1" stack_key runtime_key
+  stack_key="$( { echo "layers: zstd-3, mtimes kept"
            git -C "$src" ls-tree HEAD -- docker/Dockerfile.rocm_base tools/vllm-rocm/therock_wheels.py
          } | sha256sum | cut -c1-16)"
-  kr="$( { echo "$ks"
+  runtime_key="$( { echo "$stack_key"
            sed '/^# ==== per-commit stages/q' "${src}/docker/Dockerfile.rocm"
            git -C "$src" ls-tree HEAD -- \
              requirements/common.txt requirements/rocm.txt requirements/test/rocm.txt \
              rust-toolchain.toml tests/vllm_test_utils tools/install_torchcodec_rocm.sh
          } | sha256sum | cut -c1-16)"
-  printf '%s %s' "$ks" "$kr"
+  printf '%s %s' "$stack_key" "$runtime_key"
 }
 
 # image_digest <ref> -> prints the sha256 digest of <ref>

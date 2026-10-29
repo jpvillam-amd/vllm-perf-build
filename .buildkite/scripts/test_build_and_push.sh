@@ -86,9 +86,9 @@ g config uploadpack.allowAnySHA1InWant true
 g config uploadpack.allowFilter true
 
 source "$HERE/lib.sh"
-read -r KS KR <<<"$(rocm_content_keys "$UPSTREAM")"
-STACK="rocm/vllm-ci:stack-rocm-$KS"
-RUNTIME_IMG="rocm/vllm-ci:runtime-rocm-$KR"
+read -r STACK_KEY RUNTIME_KEY <<<"$(rocm_content_keys "$UPSTREAM")"
+STACK="rocm/vllm-ci:stack-rocm-$STACK_KEY"
+RUNTIME_IMG="rocm/vllm-ci:runtime-rocm-$RUNTIME_KEY"
 
 failures=0
 check() {
@@ -180,9 +180,9 @@ check "BUILD_BASE's image is the stack" "$(bake_var STACK_IMAGE)" "me/aiter-stac
 
 # A PR whose stack changed only has it under vLLM CI's pr<N>- tags.
 resolve VLLM_COMMIT="$BAKE_SHA"
-FAKE_IMAGES="rocm/vllm-dev:pr42-stack-rocm-$KS rocm/vllm-dev:pr42-runtime-rocm-$KR" build VLLM_PR=42
-check "PR stack is found under pr<N>-" "$(bake_var STACK_IMAGE)" "$(pinned "rocm/vllm-dev:pr42-stack-rocm-$KS")"
-check "PR runtime is found under pr<N>-" "$(bake_var RUNTIME)" "$(pinned "rocm/vllm-dev:pr42-runtime-rocm-$KR")"
+FAKE_IMAGES="rocm/vllm-dev:pr42-stack-rocm-$STACK_KEY rocm/vllm-dev:pr42-runtime-rocm-$RUNTIME_KEY" build VLLM_PR=42
+check "PR stack is found under pr<N>-" "$(bake_var STACK_IMAGE)" "$(pinned "rocm/vllm-dev:pr42-stack-rocm-$STACK_KEY")"
+check "PR runtime is found under pr<N>-" "$(bake_var RUNTIME)" "$(pinned "rocm/vllm-dev:pr42-runtime-rocm-$RUNTIME_KEY")"
 
 # A registry outage is not a missing image: fail rather than build hours of stack.
 resolve VLLM_COMMIT="$BAKE_SHA"

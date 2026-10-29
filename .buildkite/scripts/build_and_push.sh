@@ -87,15 +87,15 @@ if uses_stack_context "${src_dir}/${dockerfile}"; then
     # A custom stack: the runtime has to be built on top of it.
     stack_image="$BASE_IMAGE"
   else
-    read -r ks kr <<<"$(rocm_content_keys "$src_dir")"
-    echo "vLLM CI content keys: Ks=${ks} Kr=${kr}"
+    read -r stack_key runtime_key <<<"$(rocm_content_keys "$src_dir")"
+    echo "vLLM CI image keys: stack=${stack_key} runtime=${runtime_key}"
     pr_prefix="${VLLM_PR:+pr${VLLM_PR}-}"
 
-    stack_refs=("${ROCM_CI_REPO}:stack-rocm-${ks}")
-    [[ -n "$pr_prefix" ]] && stack_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}stack-rocm-${ks}")
+    stack_refs=("${ROCM_CI_REPO}:stack-rocm-${stack_key}")
+    [[ -n "$pr_prefix" ]] && stack_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}stack-rocm-${stack_key}")
     if stack_image="$(find_pinned_image "${stack_refs[@]}")"; then
-      runtime_refs=("${ROCM_CI_REPO}:runtime-rocm-${kr}")
-      [[ -n "$pr_prefix" ]] && runtime_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}runtime-rocm-${kr}")
+      runtime_refs=("${ROCM_CI_REPO}:runtime-rocm-${runtime_key}")
+      [[ -n "$pr_prefix" ]] && runtime_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}runtime-rocm-${runtime_key}")
       if [[ -n "$EXTRA_BUILD_ARGS" ]]; then
         # Args such as NIC_BACKEND configure the runtime stage, which a
         # prebuilt runtime would silently ignore.
@@ -106,13 +106,13 @@ if uses_stack_context "${src_dir}/${dockerfile}"; then
         rc=$?
         ((rc == 1)) || exit 1
         runtime_image=""
-        echo "No vLLM CI runtime for Kr=${kr}: building it on the stack (minutes)."
+        echo "No vLLM CI runtime for key ${runtime_key}: building it on the stack (minutes)."
       fi
     else
       rc=$?
       ((rc == 1)) || exit 1
       stack_image=""
-      echo "No vLLM CI stack for Ks=${ks} (looked for ${stack_refs[*]})."
+      echo "No vLLM CI stack for key ${stack_key} (looked for ${stack_refs[*]})."
       echo "Building the stack from docker/Dockerfile.rocm_base in this build (hours)."
     fi
   fi

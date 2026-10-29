@@ -253,10 +253,12 @@ How it builds depends on the Dockerfile at that commit:
   `docker/docker-bake-rocm.hcl` provides, so the build runs `docker buildx bake` with
   that file, the way vLLM CI does. The `stack` (the final stage of
   `Dockerfile.rocm_base`) and the `runtime` (stack plus every pip dependency) come from
-  vLLM CI's content-keyed images for that commit, `rocm/vllm-ci:stack-rocm-<Ks>` and
-  `runtime-rocm-<Kr>`, or the `rocm/vllm-dev:pr<N>-` copies for a PR that changed them.
-  They are pinned by digest. The keys are computed as vLLM's
-  `.buildkite/scripts/rocm/build.sh` computes them. If a stack has not been published,
+  vLLM CI's prebuilt images for that commit, `rocm/vllm-ci:stack-rocm-<stack-key>` and
+  `runtime-rocm-<runtime-key>`, or the `rocm/vllm-dev:pr<N>-` copies for a PR that changed
+  them. They are pinned by digest. Each key is a hash of the files that make up that
+  image (the base Dockerfile for the stack; that plus the pip requirements for the
+  runtime), computed as vLLM's `.buildkite/scripts/rocm/build.sh` does, so most commits
+  share the same prebuilt images. If a stack has not been published,
   the build compiles it from `Dockerfile.rocm_base` (hours). If a runtime is missing,
   the build compiles it on top of the stack (minutes). `BASE_IMAGE`, or a base from
   `BUILD_BASE=true`, replaces the stack, and then the runtime is always built on it.
