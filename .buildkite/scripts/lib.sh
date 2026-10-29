@@ -61,7 +61,7 @@ find_dockerfile() {
 }
 
 # uses_stack_context <dockerfile>
-# True for vLLM's bake-driven Dockerfile.rocm (vllm#61939 on): it starts from a
+# True for vLLM's bake-driven Dockerfile.rocm: it starts from a
 # `stack` named context that only docker/docker-bake-rocm.hcl provides, so a
 # plain `docker build` tries to pull docker.io/library/stack.
 uses_stack_context() {

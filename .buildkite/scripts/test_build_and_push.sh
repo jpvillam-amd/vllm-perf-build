@@ -58,7 +58,7 @@ STUB
 chmod +x "$WORK/bin/buildkite-agent" "$WORK/bin/docker"
 export PATH="$WORK/bin:$PATH"
 
-# Fake vLLM: an older commit with the pre-#61939 Dockerfile, then a tagged
+# Fake vLLM: an older commit with the pre-bake Dockerfile, then a tagged
 # release, then a commit on the bake layout.
 UPSTREAM="$WORK/vllm"
 git init -q "$UPSTREAM"
@@ -112,14 +112,14 @@ resolve() {
   rm -rf "$META_DIR" "$CALLS" "$BAKE_ENV" "$ARCHIVAL"
   mkdir -p "$META_DIR"
   env -u VLLM_PR -u VLLM_BRANCH -u VLLM_COMMIT VLLM_REPO="$UPSTREAM" "$@" \
-    bash "$HERE/resolve_ref.sh" >"$WORK/resolve.out" 2>&1
+    bash "$HERE/resolve_ref.sh" </dev/null >"$WORK/resolve.out" 2>&1
 }
 
 # build <env...>: build_and_push.sh in a scratch agent checkout.
 build() {
   mkdir -p "$WORK/agent"
   (cd "$WORK/agent" && env -u BASE_IMAGE -u EXTRA_BUILD_ARGS PUSH_IMAGE=false \
-    TRIGGER_PERF_EVAL=false "$@" bash "$HERE/build_and_push.sh") >"$WORK/build.out" 2>&1
+    TRIGGER_PERF_EVAL=false "$@" bash "$HERE/build_and_push.sh") </dev/null >"$WORK/build.out" 2>&1
 }
 
 # --- resolve_ref.sh ---------------------------------------------------------
@@ -191,7 +191,7 @@ rc=$?
 check "registry error fails the build" "$([[ $rc -ne 0 ]] && echo failed || echo passed)" "failed"
 check "registry error does not start a build" "$(grep -c 'buildx bake' <<<"$(calls)")" "0"
 
-# --- build_and_push.sh, pre-#61939 layout ------------------------------------
+# --- build_and_push.sh, pre-bake layout --------------------------------------
 
 resolve VLLM_COMMIT="$LEGACY_SHA"
 build

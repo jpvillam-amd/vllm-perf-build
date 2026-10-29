@@ -73,9 +73,7 @@ labels=(
 )
 
 if uses_stack_context "${src_dir}/${dockerfile}"; then
-  # vllm#61939 on: Dockerfile.rocm builds on a `stack` named context (the
-  # final stage of Dockerfile.rocm_base) and optionally a prebuilt `runtime`,
-  # both wired up by vLLM's bake file. Build through it, as vLLM CI does.
+  # Build through vLLM's bake file, as vLLM CI does.
   bake_file="${src_dir}/docker/docker-bake-rocm.hcl"
   if [[ ! -f "$bake_file" ]]; then
     echo "^^^ +++"
@@ -156,7 +154,8 @@ if uses_stack_context "${src_dir}/${dockerfile}"; then
   done
   build_cmd+=("$DOCKER_TARGET")
 else
-  # Before vllm#61939: a single Dockerfile on top of a prebuilt base image.
+  # Legacy path, for vLLM commits from before the bake layout: a single
+  # Dockerfile on top of a prebuilt base image.
   BASE_IMAGE="${BASE_IMAGE:-rocm/vllm-dev:base}"
   echo "Base image : ${BASE_IMAGE}"
   echo "max_jobs   : ${MAX_JOBS}"
