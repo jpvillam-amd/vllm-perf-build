@@ -59,10 +59,12 @@ variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VLLM_REPO` | `https://github.com/vllm-project/vllm.git` | Source repo. Leave as upstream for PRs — even fork PRs are fetched from here. |
-| `BASE_IMAGE` | `rocm/vllm-dev:base` | Prebuilt ROCm/PyTorch base, pulled rather than built. |
-| `DOCKER_TARGET` | `vllm-openai` | Dockerfile stage. `final` for the runtime without the serving entrypoint, `test` for the CI test image. |
+| `BASE_IMAGE` | see [How it works](#how-it-works) | Prebuilt ROCm/PyTorch base (the `stack`, on current vLLM), pulled rather than built. |
+| `DOCKER_TARGET` | `vllm-openai` | Dockerfile stage (a bake target on current vLLM). `runtime` (`final` before vllm#61939) for the runtime without the serving entrypoint, `test` for the CI test image. |
 | `PYTORCH_ROCM_ARCH` | `gfx942;gfx950` | GPU targets. Each arch is a full HIP kernel compile pass. |
-| `MAX_JOBS` | `$(nproc)` | Build parallelism. |
+| `MAX_JOBS` | `$(nproc)` | Build parallelism. Older vLLM only: current `Dockerfile.rocm` has no such arg and uses the builder's `nproc`. |
+| `ROCM_CI_REPO` | `rocm/vllm-ci` | Where vLLM CI publishes its prebuilt stack and runtime images. |
+| `ROCM_CI_PR_REPO` | `rocm/vllm-dev` | Where vLLM CI publishes them for PR builds, under `pr<N>-` tags. |
 | `IMAGE_REPO` | `rocm/vllm-dev` | Destination repo. |
 | `DOCKERHUB_USER` | `jpvillam` | Docker Hub account used to push. |
 | `DOCKERHUB_TOKEN_SECRET` | `dockerhub_token` | Name of the Buildkite secret holding the access token. |
@@ -73,7 +75,8 @@ variables:
 ## Swapping AITER (building the base image)
 
 AITER is cloned and compiled inside **`Dockerfile.rocm_base`**, not `Dockerfile.rocm`.
-It's baked into `rocm/vllm-dev:base`, which the main build normally just pulls. So
+It's baked into the base (vLLM CI's stack on current vLLM, `rocm/vllm-dev:base` on
+older commits), which the main build normally just pulls. So
 changing AITER means rebuilding the base image — passing `AITER_BRANCH` to the main
 build would be silently ignored, since `Dockerfile.rocm` has no such ARG.
 
@@ -240,11 +243,31 @@ commit sha with `git ls-remote`, then records the repo, ref, commit, and image t
 Buildkite meta-data. Pinning up front means a branch that moves mid-build cannot change
 what actually ships under the tag.
 
-`.buildkite/scripts/build_and_push.sh` fetches that exact commit, builds
-`docker/Dockerfile.rocm` from it with `REMOTE_VLLM=0` (so the image is built from the
-checked-out source rather than a clone performed inside the Dockerfile), then pushes.
-It falls back to a root-level `Dockerfile.rocm` for older vLLM commits, before the
-Dockerfiles moved under `docker/`.
+`.buildkite/scripts/build_and_push.sh` fetches that exact commit and builds
+`docker/Dockerfile.rocm` from it, then pushes. It looks for a root-level
+`Dockerfile.rocm` for older vLLM commits, before the Dockerfiles moved under `docker/`.
+How it builds depends on the Dockerfile at that commit:
+
+- **Current vLLM** (from [vllm#61939](https://github.com/vllm-project/vllm/pull/61939),
+  2026-10-29): `Dockerfile.rocm` starts `FROM stack`, a named context that only vLLM's
+  `docker/docker-bake-rocm.hcl` provides, so the build runs `docker buildx bake` with
+  that file, the way vLLM CI does. The `stack` (the final stage of
+  `Dockerfile.rocm_base`) and the `runtime` (stack plus every pip dependency) come from
+  vLLM CI's prebuilt images for that commit, `rocm/vllm-ci:stack-rocm-<stack-key>` and
+  `runtime-rocm-<runtime-key>`, or the `rocm/vllm-dev:pr<N>-` copies for a PR that changed
+  them. They are pinned by digest. Each key is a hash of the files that make up that
+  image (the base Dockerfile for the stack; that plus the pip requirements for the
+  runtime), computed as vLLM's `.buildkite/scripts/rocm/build.sh` does, so most commits
+  share the same prebuilt images. If a stack has not been published,
+  the build compiles it from `Dockerfile.rocm_base` (hours). If a runtime is missing,
+  the build compiles it on top of the stack (minutes). `BASE_IMAGE`, or a base from
+  `BUILD_BASE=true`, replaces the stack, and then the runtime is always built on it.
+  So is the runtime whenever `EXTRA_BUILD_ARGS` is set, since args like `NIC_BACKEND`
+  configure it. The build context is an export of the commit plus the
+  `.git_archival.txt` that vLLM's version stage needs in place of `.git`.
+- **Older vLLM**: a plain `docker build` on top of `BASE_IMAGE` (default
+  `rocm/vllm-dev:base`), with `REMOTE_VLLM=0`, so the image is built from the
+  checked-out source rather than a clone performed inside the Dockerfile.
 
 ## Note on build cost
 

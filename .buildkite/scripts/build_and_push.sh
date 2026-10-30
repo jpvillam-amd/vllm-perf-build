@@ -5,7 +5,9 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 IMAGE_REPO="${IMAGE_REPO:-rocm/vllm-dev}"
-BASE_IMAGE="${BASE_IMAGE:-rocm/vllm-dev:base}"
+# Empty means the default for the vLLM commit's Dockerfile layout: vLLM CI's
+# prebuilt stack for that commit, or rocm/vllm-dev:base for older commits.
+BASE_IMAGE="${BASE_IMAGE:-}"
 DOCKER_TARGET="${DOCKER_TARGET:-vllm-openai}"
 PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH:-gfx942;gfx950}"
 PUSH_IMAGE="$(push_image)"
@@ -17,6 +19,10 @@ CLONE_DEPTH="${CLONE_DEPTH:-1}"
 EXTRA_BUILD_ARGS="${EXTRA_BUILD_ARGS:-}"
 # Space-separated additional tags to publish alongside the primary one.
 EXTRA_IMAGE_TAGS="${EXTRA_IMAGE_TAGS:-}"
+# Where vLLM CI publishes its content-keyed stack and runtime images: trusted
+# builds to ROCM_CI_REPO, PR builds to ROCM_CI_PR_REPO under pr<N>- tags.
+ROCM_CI_REPO="${ROCM_CI_REPO:-rocm/vllm-ci}"
+ROCM_CI_PR_REPO="${ROCM_CI_PR_REPO:-rocm/vllm-dev}"
 
 if [[ "$PUSH_IMAGE" == "true" && -z "$DOCKERHUB_USER" ]]; then
   echo "^^^ +++"
@@ -27,7 +33,8 @@ fi
 meta() { buildkite-agent meta-data get "$1"; }
 
 vllm_repo="$(meta vllm-repo)"
-vllm_ref="$(meta vllm-ref)"
+# Unset for a direct commit build.
+vllm_ref="$(buildkite-agent meta-data get vllm-ref --default "")"
 commit="$(meta vllm-commit)"
 image_ref="$(meta image-ref)"
 
@@ -40,7 +47,8 @@ if [[ -n "$base_image" ]]; then
 fi
 
 src_dir="${PWD}/.vllm-src"
-trap 'rm -rf "$src_dir"' EXIT
+ctx_dir="${PWD}/.vllm-ctx"
+trap 'rm -rf "$src_dir" "$ctx_dir"' EXIT
 
 echo "--- :git: Fetching vLLM @ ${commit}"
 fetch_vllm_source "$src_dir" "$vllm_repo" "$vllm_ref" "$commit" "$CLONE_DEPTH"
@@ -52,45 +60,138 @@ if ! dockerfile="$(find_dockerfile "$src_dir" "docker/Dockerfile.rocm" "Dockerfi
 fi
 echo "Using ${dockerfile}"
 
+# Before the image lookups below too, so they are not anonymously rate-limited.
 if [[ "$PUSH_IMAGE" == "true" ]]; then
   echo "--- :docker: Logging in to Docker Hub as ${DOCKERHUB_USER}"
   docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
 fi
 
-echo "--- :hammer: Building ${image_ref}"
-echo "Base image : ${BASE_IMAGE}"
-echo "Target     : ${DOCKER_TARGET}"
-echo "GPU archs  : ${PYTORCH_ROCM_ARCH}"
-echo "max_jobs   : ${MAX_JOBS}"
-df -h "$PWD" || true
-
-build_cmd=(
-  docker build
-  --file "${src_dir}/${dockerfile}"
-  --target "$DOCKER_TARGET"
-  --tag "$image_ref"
-  --build-arg "REMOTE_VLLM=0"
-  --build-arg "BASE_IMAGE=${BASE_IMAGE}"
-  --build-arg "ARG_PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}"
-  --build-arg "max_jobs=${MAX_JOBS}"
-  --build-arg "GIT_REPO_CHECK=0"
-  --label "org.opencontainers.image.source=${vllm_repo%.git}"
-  --label "org.opencontainers.image.revision=${commit}"
-  --label "buildkite.build.url=${BUILDKITE_BUILD_URL:-}"
+labels=(
+  "org.opencontainers.image.source=${vllm_repo%.git}"
+  "org.opencontainers.image.revision=${commit}"
+  "buildkite.build.url=${BUILDKITE_BUILD_URL:-}"
 )
 
-for extra in $EXTRA_BUILD_ARGS; do
-  build_cmd+=(--build-arg "$extra")
-done
+if uses_stack_context "${src_dir}/${dockerfile}"; then
+  # Build through vLLM's bake file, as vLLM CI does.
+  bake_file="${src_dir}/docker/docker-bake-rocm.hcl"
+  if [[ ! -f "$bake_file" ]]; then
+    echo "^^^ +++"
+    echo "${dockerfile} needs the 'stack' named context, but docker/docker-bake-rocm.hcl is missing." >&2
+    exit 1
+  fi
+
+  stack_image=""
+  runtime_image=""
+  if [[ -n "$BASE_IMAGE" ]]; then
+    # A custom stack: the runtime has to be built on top of it.
+    stack_image="$BASE_IMAGE"
+  else
+    read -r stack_key runtime_key <<<"$(rocm_content_keys "$src_dir")"
+    echo "vLLM CI image keys: stack=${stack_key} runtime=${runtime_key}"
+    pr_prefix="${VLLM_PR:+pr${VLLM_PR}-}"
+
+    stack_refs=("${ROCM_CI_REPO}:stack-rocm-${stack_key}")
+    [[ -n "$pr_prefix" ]] && stack_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}stack-rocm-${stack_key}")
+    if stack_image="$(find_pinned_image "${stack_refs[@]}")"; then
+      runtime_refs=("${ROCM_CI_REPO}:runtime-rocm-${runtime_key}")
+      [[ -n "$pr_prefix" ]] && runtime_refs+=("${ROCM_CI_PR_REPO}:${pr_prefix}runtime-rocm-${runtime_key}")
+      if [[ -n "$EXTRA_BUILD_ARGS" ]]; then
+        # Args such as NIC_BACKEND configure the runtime stage, which a
+        # prebuilt runtime would silently ignore.
+        echo "EXTRA_BUILD_ARGS is set: building the runtime rather than reusing vLLM CI's."
+      elif runtime_image="$(find_pinned_image "${runtime_refs[@]}")"; then
+        :
+      else
+        rc=$?
+        ((rc == 1)) || exit 1
+        runtime_image=""
+        echo "No vLLM CI runtime for key ${runtime_key}: building it on the stack (minutes)."
+      fi
+    else
+      rc=$?
+      ((rc == 1)) || exit 1
+      stack_image=""
+      echo "No vLLM CI stack for key ${stack_key} (looked for ${stack_refs[*]})."
+      echo "Building the stack from docker/Dockerfile.rocm_base in this build (hours)."
+    fi
+  fi
+
+  echo "Building ${dockerfile} through docker/docker-bake-rocm.hcl"
+  echo "Stack      : ${stack_image:-<built from Dockerfile.rocm_base>}"
+  echo "Runtime    : ${runtime_image:-<built from the stack>}"
+
+  echo "--- :package: Preparing the build context"
+  export_build_context "$src_dir" "$ctx_dir"
+  cat "${ctx_dir}/.git_archival.txt"
+
+  # Every bake variable that would change the image is set explicitly, so a
+  # same-named variable in the agent's environment cannot leak in.
+  build_cmd=(
+    env
+    STACK_IMAGE="$stack_image"
+    RUNTIME="$runtime_image"
+    TEST_DEPS=""
+    STACK_WHEELS=""
+    CONTEXT="$ctx_dir"
+    TAG="$image_ref"
+    PUSH=false
+    CACHE=""
+    CACHE_TO=""
+    CI_ARCH="$PYTORCH_ROCM_ARCH"
+    AITER_SPEC=""
+    AITER_NIGHTLY=""
+    SCCACHE_BUCKET_NAME=""
+    docker buildx bake
+    --file "$bake_file"
+    --set "${DOCKER_TARGET}.args.ARCH=${PYTORCH_ROCM_ARCH}"
+  )
+  for label in "${labels[@]}"; do
+    build_cmd+=(--set "${DOCKER_TARGET}.labels.${label}")
+  done
+  for extra in $EXTRA_BUILD_ARGS; do
+    build_cmd+=(--set "${DOCKER_TARGET}.args.${extra}")
+  done
+  build_cmd+=("$DOCKER_TARGET")
+else
+  # Legacy path, for vLLM commits from before the bake layout: a single
+  # Dockerfile on top of a prebuilt base image.
+  BASE_IMAGE="${BASE_IMAGE:-rocm/vllm-dev:base}"
+  echo "Base image : ${BASE_IMAGE}"
+  echo "max_jobs   : ${MAX_JOBS}"
+
+  build_cmd=(
+    docker build
+    --file "${src_dir}/${dockerfile}"
+    --target "$DOCKER_TARGET"
+    --tag "$image_ref"
+    --build-arg "REMOTE_VLLM=0"
+    --build-arg "BASE_IMAGE=${BASE_IMAGE}"
+    --build-arg "ARG_PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}"
+    --build-arg "max_jobs=${MAX_JOBS}"
+    --build-arg "GIT_REPO_CHECK=0"
+  )
+  for label in "${labels[@]}"; do
+    build_cmd+=(--label "$label")
+  done
+  for extra in $EXTRA_BUILD_ARGS; do
+    build_cmd+=(--build-arg "$extra")
+  done
+  build_cmd+=("$src_dir")
+fi
+
+echo "--- :hammer: Building ${image_ref}"
+echo "Target     : ${DOCKER_TARGET}"
+echo "GPU archs  : ${PYTORCH_ROCM_ARCH}"
+df -h "$PWD" || true
+
+"${build_cmd[@]}"
 
 all_tags=("$image_ref")
 for tag in $EXTRA_IMAGE_TAGS; do
   all_tags+=("${IMAGE_REPO}:${tag}")
-  build_cmd+=(--tag "${IMAGE_REPO}:${tag}")
+  docker tag "$image_ref" "${IMAGE_REPO}:${tag}"
 done
-
-build_cmd+=("$src_dir")
-"${build_cmd[@]}"
 
 echo "--- :mag: Image summary"
 docker image inspect "$image_ref" \

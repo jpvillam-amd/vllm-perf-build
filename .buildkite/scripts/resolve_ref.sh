@@ -91,7 +91,11 @@ fi
 image_ref="${IMAGE_REPO}:${image_tag}"
 
 buildkite-agent meta-data set "vllm-repo" "$VLLM_REPO"
-buildkite-agent meta-data set "vllm-ref" "$git_ref"
+# A direct commit has no ref, and meta-data refuses empty values: leave the key
+# unset and readers get "" from --default.
+if [[ -n "$git_ref" ]]; then
+  buildkite-agent meta-data set "vllm-ref" "$git_ref"
+fi
 buildkite-agent meta-data set "vllm-ref-kind" "$ref_kind"
 buildkite-agent meta-data set "vllm-commit" "$commit"
 buildkite-agent meta-data set "image-tag" "$image_tag"
