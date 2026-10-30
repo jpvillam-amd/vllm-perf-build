@@ -269,9 +269,6 @@ How it builds depends on the Dockerfile at that commit:
   `rocm/vllm-dev:base`), with `REMOTE_VLLM=0`, so the image is built from the
   checked-out source rather than a clone performed inside the Dockerfile.
 
-`.buildkite/scripts/test_build_and_push.sh` runs both scripts against a fake vLLM repo
-with `buildkite-agent` and `docker` stubbed. Run it directly.
-
 ## Note on build cost
 
 Even with `BASE_IMAGE` pulled rather than built, the remaining work — HIP kernel
