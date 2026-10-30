@@ -11,7 +11,7 @@ BUILD_BASE="${BUILD_BASE:-false}"
 
 if [[ "$BUILD_BASE" != "true" ]]; then
   echo "BUILD_BASE is '${BUILD_BASE}' — the main build will use a prebuilt base"
-  echo "(${BASE_IMAGE:-vLLM CI's stack for the commit, or rocm/vllm-dev:base for older commits})."
+  echo "(${BASE_IMAGE:-the vLLM CI stack for the commit, or rocm/vllm-dev:base for older commits})."
   echo "Set BUILD_BASE=true to build a base image with a specific AITER."
   exit 0
 fi
