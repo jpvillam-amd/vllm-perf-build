@@ -149,13 +149,35 @@ export_build_context() {
 # docker_hub_login <user> <secret-name>
 # Prefers a DOCKERHUB_TOKEN already in the environment (agent hook) and falls
 # back to the Buildkite secrets backend.
+#
+# Logs in to a per-job copy of the agent's Docker config, exported as
+# DOCKER_CONFIG, never to the agent's own. Container agents mount
+# ~/.docker/config.json, and docker login replaces that file by rename, which
+# fails on a mount point ("device or resource busy"). The copy also keeps the
+# token out of the agent's home. It holds the token, so callers delete
+# JOB_DOCKER_CONFIG on exit.
 docker_hub_login() {
-  local user="$1" secret_name="$2" token
+  local user="$1" secret_name="$2" token src d
   if [[ -n "${DOCKERHUB_TOKEN:-}" ]]; then
     token="$DOCKERHUB_TOKEN"
   else
     token="$(buildkite-agent secret get "$secret_name")"
   fi
+
+  src="${DOCKER_CONFIG:-${HOME}/.docker}"
+  JOB_DOCKER_CONFIG="$(mktemp -d)"
+  # Keep any registry logins the agent already set up.
+  if [[ -f "${src}/config.json" ]]; then
+    cp "${src}/config.json" "${JOB_DOCKER_CONFIG}/"
+  fi
+  # buildx can be installed, and its builders recorded, under the agent's config.
+  for d in cli-plugins buildx; do
+    if [[ -e "${src}/${d}" ]]; then
+      ln -s "${src}/${d}" "${JOB_DOCKER_CONFIG}/${d}"
+    fi
+  done
+  export DOCKER_CONFIG="$JOB_DOCKER_CONFIG"
+
   printf '%s' "$token" | docker login --username "$user" --password-stdin
 }
 

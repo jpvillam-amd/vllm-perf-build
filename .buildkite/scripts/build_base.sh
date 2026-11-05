@@ -62,6 +62,10 @@ echo "AITER branch : ${AITER_BRANCH:-<Dockerfile default>}"
 echo "AITER repo   : ${AITER_REPO:-<Dockerfile default>}"
 echo "GPU archs    : ${PYTORCH_ROCM_ARCH}"
 
+src_dir="${PWD}/.vllm-base-src"
+# Set before the login, so the reuse exit below also removes its config.
+trap 'rm -rf "$src_dir" ${JOB_DOCKER_CONFIG:+"$JOB_DOCKER_CONFIG"}' EXIT
+
 if [[ "$PUSH_IMAGE" == "true" ]]; then
   docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
 fi
@@ -75,9 +79,6 @@ if [[ "$BASE_FORCE_REBUILD" != "true" ]] && docker manifest inspect "$base_image
     "Reused existing base image \`${base_image}\`"
   exit 0
 fi
-
-src_dir="${PWD}/.vllm-base-src"
-trap 'rm -rf "$src_dir"' EXIT
 
 echo "--- :git: Fetching vLLM @ ${commit}"
 fetch_vllm_source "$src_dir" "$vllm_repo" "$vllm_ref" "$commit" "$CLONE_DEPTH"

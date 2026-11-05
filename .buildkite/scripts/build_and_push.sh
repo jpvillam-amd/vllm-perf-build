@@ -48,7 +48,7 @@ fi
 
 src_dir="${PWD}/.vllm-src"
 ctx_dir="${PWD}/.vllm-ctx"
-trap 'rm -rf "$src_dir" "$ctx_dir"' EXIT
+trap 'rm -rf "$src_dir" "$ctx_dir" ${JOB_DOCKER_CONFIG:+"$JOB_DOCKER_CONFIG"}' EXIT
 
 echo "--- :git: Fetching vLLM @ ${commit}"
 fetch_vllm_source "$src_dir" "$vllm_repo" "$vllm_ref" "$commit" "$CLONE_DEPTH"
