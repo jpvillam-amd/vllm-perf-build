@@ -41,6 +41,7 @@ image_ref=""
 cleanup() {
   rm -rf "$scratch"
   docker rmi ${image_ref:+"$image_ref"} "$base_image" >/dev/null 2>&1 || true
+  rm -rf ${JOB_DOCKER_CONFIG:+"$JOB_DOCKER_CONFIG"}
 }
 trap cleanup EXIT
 
