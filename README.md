@@ -66,8 +66,6 @@ variables:
 | `ROCM_CI_REPO` | `rocm/vllm-ci` | Where vLLM CI publishes its prebuilt stack and runtime images. |
 | `ROCM_CI_PR_REPO` | `rocm/vllm-dev` | Where vLLM CI publishes them for PR builds, under `pr<N>-` tags. |
 | `IMAGE_REPO` | `rocm/vllm-dev` | Destination repo. |
-| `DOCKERHUB_USER` | `jpvillam` | Docker Hub account used to push. |
-| `DOCKERHUB_TOKEN_SECRET` | `dockerhub_token` | Name of the Buildkite secret holding the access token. |
 | `PUSH_IMAGE` | `true` | Set `false` to build only, as a "does this PR still build" gate. Ignored when `TRIGGER_PERF_EVAL=true`. |
 | `EXTRA_BUILD_ARGS` | — | Space-separated extra `--build-arg`s, e.g. `NIC_BACKEND=none USE_SCCACHE=1`. |
 | `CLONE_DEPTH` | `1` | Shallow clone depth for the vLLM checkout. |
@@ -221,17 +219,19 @@ The other perf-eval variables apply as above.
    listening there.
 
 2. Create a Docker Hub access token with **Read & Write** scope on `rocm/vllm-dev`, and
-   store it as a Buildkite secret named `dockerhub_token`:
+   store the account and its token as two Buildkite secrets:
 
    ```bash
    # Buildkite UI: Pipeline Settings -> Secrets -> New Secret
-   # key: dockerhub_token   value: <the token>
+   # key: DOCKERHUB_USER    value: <the Docker Hub account>
+   # key: DOCKERHUB_TOKEN   value: <its access token>
    ```
 
-   The build reads it with `buildkite-agent secret get dockerhub_token`. If your agents
-   are self-hosted and don't have the Buildkite secrets backend available, export
-   `DOCKERHUB_TOKEN` from an agent `environment` hook instead — the script prefers that
-   variable when present, so no pipeline change is needed.
+   The build reads both with `buildkite-agent secret get`. There is no default account:
+   a build that pushes fails at login without them. If your agents are self-hosted and
+   don't have the Buildkite secrets backend available, export `DOCKERHUB_USER` and
+   `DOCKERHUB_TOKEN` from an agent `environment` hook instead — the script prefers those
+   variables when present, so no pipeline change is needed.
 
 3. Confirm the agents in the `amd-cpu` queue have a working docker daemon and enough
    free disk (see below).

@@ -11,7 +11,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 IMAGE_REPO="${IMAGE_REPO:-rocm/vllm-dev}"
 PUSH_IMAGE="$(push_image)"
-DOCKERHUB_TOKEN_SECRET="${DOCKERHUB_TOKEN_SECRET:-dockerhub_token}"
 
 meta() { buildkite-agent meta-data get "$1"; }
 
@@ -51,8 +50,8 @@ curl -fsSL --retry 3 -o "$selector" "$selector_url" \
   || fail 1 "could not fetch the wheel selector" "${selector_url}"
 
 if [[ "$PUSH_IMAGE" == "true" ]]; then
-  echo "--- :docker: Logging in to Docker Hub as ${DOCKERHUB_USER}"
-  docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
+  echo "--- :docker: Logging in to Docker Hub"
+  docker_hub_login
 fi
 
 echo "--- :arrow_down: Pulling base nightly ${base_image}"
