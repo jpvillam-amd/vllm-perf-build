@@ -146,14 +146,17 @@ export_build_context() {
     > "${dest}/.git_archival.txt"
 }
 
-# docker_hub_credential <name>: $<name> if an agent hook exported it, else the
-# Buildkite secret of that name.
+# docker_hub_credential <name> <var>: sets <var> to $<name> if an agent hook
+# exported it, else to the Buildkite secret of that name. It assigns rather
+# than prints, so the value never passes through stdout and cannot end up in
+# the log. Fails if the secret cannot be read.
 docker_hub_credential() {
-  local name="$1"
-  if [[ -n "${!name:-}" ]]; then
-    printf '%s' "${!name}"
+  local _dhc_name="$1"
+  local -n _dhc_out="$2"
+  if [[ -n "${!_dhc_name:-}" ]]; then
+    _dhc_out="${!_dhc_name}"
   else
-    buildkite-agent secret get "$name"
+    _dhc_out="$(buildkite-agent secret get "$_dhc_name")"
   fi
 }
 
@@ -167,8 +170,8 @@ docker_hub_credential() {
 # replace. Callers delete JOB_DOCKER_CONFIG on exit, since it holds the token.
 docker_hub_login() {
   local user token src d
-  user="$(docker_hub_credential DOCKERHUB_USER)" || user=""
-  token="$(docker_hub_credential DOCKERHUB_TOKEN)" || token=""
+  docker_hub_credential DOCKERHUB_USER user || user=""
+  docker_hub_credential DOCKERHUB_TOKEN token || token=""
   if [[ -z "$user" || -z "$token" ]]; then
     echo "^^^ +++"
     echo "Docker Hub login needs the DOCKERHUB_USER and DOCKERHUB_TOKEN Buildkite secrets." >&2
