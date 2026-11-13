@@ -11,8 +11,6 @@ BASE_IMAGE="${BASE_IMAGE:-}"
 DOCKER_TARGET="${DOCKER_TARGET:-vllm-openai}"
 PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH:-gfx942;gfx950}"
 PUSH_IMAGE="$(push_image)"
-DOCKERHUB_USER="${DOCKERHUB_USER:-}"
-DOCKERHUB_TOKEN_SECRET="${DOCKERHUB_TOKEN_SECRET:-dockerhub_token}"
 MAX_JOBS="${MAX_JOBS:-$(nproc)}"
 CLONE_DEPTH="${CLONE_DEPTH:-1}"
 # Space-separated extra args, e.g. EXTRA_BUILD_ARGS="NIC_BACKEND=none USE_SCCACHE=1"
@@ -23,12 +21,6 @@ EXTRA_IMAGE_TAGS="${EXTRA_IMAGE_TAGS:-}"
 # builds to ROCM_CI_REPO, PR builds to ROCM_CI_PR_REPO under pr<N>- tags.
 ROCM_CI_REPO="${ROCM_CI_REPO:-rocm/vllm-ci}"
 ROCM_CI_PR_REPO="${ROCM_CI_PR_REPO:-rocm/vllm-dev}"
-
-if [[ "$PUSH_IMAGE" == "true" && -z "$DOCKERHUB_USER" ]]; then
-  echo "^^^ +++"
-  echo "DOCKERHUB_USER is not set but PUSH_IMAGE=true." >&2
-  exit 1
-fi
 
 meta() { buildkite-agent meta-data get "$1"; }
 
@@ -62,8 +54,8 @@ echo "Using ${dockerfile}"
 
 # Before the image lookups below too, so they are not anonymously rate-limited.
 if [[ "$PUSH_IMAGE" == "true" ]]; then
-  echo "--- :docker: Logging in to Docker Hub as ${DOCKERHUB_USER}"
-  docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
+  echo "--- :docker: Logging in to Docker Hub"
+  docker_hub_login
 fi
 
 labels=(

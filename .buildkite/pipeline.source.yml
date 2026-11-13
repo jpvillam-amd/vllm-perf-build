@@ -31,8 +31,6 @@ steps:
     command: ".buildkite/scripts/build_base.sh"
     agents:
       queue: amd-cpu
-    env:
-      DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
     # Builds PyTorch, Triton, flash-attention, AITER and mori from source.
     timeout_in_minutes: 600
 
@@ -44,8 +42,6 @@ steps:
     command: ".buildkite/scripts/build_and_push.sh"
     agents:
       queue: amd-cpu
-    env:
-      DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
     timeout_in_minutes: 300
     retry:
       automatic:

@@ -18,8 +18,6 @@ fi
 
 IMAGE_REPO="${IMAGE_REPO:-rocm/vllm-dev}"
 PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH:-gfx942;gfx950}"
-DOCKERHUB_USER="${DOCKERHUB_USER:-}"
-DOCKERHUB_TOKEN_SECRET="${DOCKERHUB_TOKEN_SECRET:-dockerhub_token}"
 CLONE_DEPTH="${CLONE_DEPTH:-1}"
 PUSH_IMAGE="${PUSH_IMAGE:-true}"
 # Rebuild even when the computed tag already exists in the registry.
@@ -33,12 +31,6 @@ PYTORCH_BRANCH="${PYTORCH_BRANCH:-}"
 MORI_BRANCH="${MORI_BRANCH:-}"
 # Space-separated extras passed straight through to the base build.
 EXTRA_BASE_BUILD_ARGS="${EXTRA_BASE_BUILD_ARGS:-}"
-
-if [[ "$PUSH_IMAGE" == "true" && -z "$DOCKERHUB_USER" ]]; then
-  echo "^^^ +++"
-  echo "DOCKERHUB_USER is not set but PUSH_IMAGE=true." >&2
-  exit 1
-fi
 
 vllm_repo="$(buildkite-agent meta-data get vllm-repo)"
 vllm_ref="$(buildkite-agent meta-data get vllm-ref --default "")"
@@ -67,7 +59,7 @@ src_dir="${PWD}/.vllm-base-src"
 trap 'rm -rf "$src_dir" ${JOB_DOCKER_CONFIG:+"$JOB_DOCKER_CONFIG"}' EXIT
 
 if [[ "$PUSH_IMAGE" == "true" ]]; then
-  docker_hub_login "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN_SECRET"
+  docker_hub_login
 fi
 
 # Reuse an identical base rather than spending hours rebuilding it.

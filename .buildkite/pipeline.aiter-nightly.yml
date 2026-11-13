@@ -19,8 +19,6 @@ steps:
     command: ".buildkite/scripts/build_aiter_overlay.sh"
     agents:
       queue: amd-cpu
-    env:
-      DOCKERHUB_USER: "${DOCKERHUB_USER:-jpvillam}"
     timeout_in_minutes: 120
     # Exit 1 is transient and retried once, as in vLLM CI. 10 and 11 are not:
     # a retry would fail the same way.

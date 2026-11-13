@@ -146,19 +146,36 @@ export_build_context() {
     > "${dest}/.git_archival.txt"
 }
 
-# docker_hub_login <user> <secret-name>
-# Prefers a DOCKERHUB_TOKEN already in the environment (agent hook) and falls
-# back to the Buildkite secrets backend.
+# docker_hub_credential <name> <var>: sets <var> to $<name> if an agent hook
+# exported it, else to the Buildkite secret of that name. It assigns rather
+# than prints, so the value never passes through stdout and cannot end up in
+# the log. Fails if the secret cannot be read.
+docker_hub_credential() {
+  local _dhc_name="$1"
+  local -n _dhc_out="$2"
+  if [[ -n "${!_dhc_name:-}" ]]; then
+    _dhc_out="${!_dhc_name}"
+  else
+    _dhc_out="$(buildkite-agent secret get "$_dhc_name")"
+  fi
+}
+
+# docker_hub_login
+# Logs in as the account in DOCKERHUB_USER with its access token in
+# DOCKERHUB_TOKEN, both read the same way (docker_hub_credential). There is no
+# default account: without both, the step fails rather than push as anyone else.
 #
 # Logs in to a per-job copy of the agent's Docker config (DOCKER_CONFIG):
 # container agents mount ~/.docker/config.json, which docker login cannot
 # replace. Callers delete JOB_DOCKER_CONFIG on exit, since it holds the token.
 docker_hub_login() {
-  local user="$1" secret_name="$2" token src d
-  if [[ -n "${DOCKERHUB_TOKEN:-}" ]]; then
-    token="$DOCKERHUB_TOKEN"
-  else
-    token="$(buildkite-agent secret get "$secret_name")"
+  local user token src d
+  docker_hub_credential DOCKERHUB_USER user || user=""
+  docker_hub_credential DOCKERHUB_TOKEN token || token=""
+  if [[ -z "$user" || -z "$token" ]]; then
+    echo "^^^ +++"
+    echo "Docker Hub login needs the DOCKERHUB_USER and DOCKERHUB_TOKEN Buildkite secrets." >&2
+    return 1
   fi
 
   src="${DOCKER_CONFIG:-${HOME}/.docker}"
